@@ -1,0 +1,113 @@
+name: Backfill transcripts
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'YouTube channel URL'
+        required: false
+        default: 'https://www.youtube.com/@doomeroptimism'
+      max:
+        description: 'Max episodes to process'
+        required: false
+        default: '300'
+      only:
+        description: 'Single video ID (overrides max). Leave blank for batch.'
+        required: false
+        default: ''
+      dry_run:
+        description: 'List videos only — no downloads, no API calls'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['true', 'false']
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: transcript-backfill
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    name: Transcribe & open PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install yt-dlp + ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+          sudo chmod +x /usr/local/bin/yt-dlp
+          yt-dlp --version
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Restore transcript cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .transcripts
+          key: transcripts-${{ github.run_id }}
+          restore-keys: |
+            transcripts-
+
+      - name: Run backfill
+        env:
+          ASSEMBLYAI_API_KEY: ${{ secrets.ASSEMBLYAI_API_KEY }}
+        run: |
+          ARGS="--channel '${{ github.event.inputs.channel }}' --max ${{ github.event.inputs.max }}"
+          if [ "${{ github.event.inputs.only }}" != "" ]; then
+            ARGS="$ARGS --only ${{ github.event.inputs.only }}"
+          fi
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          echo "Running: node scripts/transcribe-backfill.mjs $ARGS"
+          eval node scripts/transcribe-backfill.mjs $ARGS
+
+      - name: Save transcript cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .transcripts
+          key: transcripts-${{ github.run_id }}
+
+      - name: Open pull request
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: claude/transcripts-backfill
+          base: claude/doomer-optimism-site-Ime4V
+          commit-message: 'Transcripts backfill via AssemblyAI'
+          title: 'Transcripts backfill (${{ github.event.inputs.max }} episodes)'
+          body: |
+            Auto-generated transcripts batch.
+
+            - Source: `${{ github.event.inputs.channel }}`
+            - Max processed: `${{ github.event.inputs.max }}`
+            - Engine: AssemblyAI Best (with diarization, auto-chapters, IAB topics)
+            - Speaker mapping: longest-talker → Ashley Colby Fitzgerald; second → guest from title
+
+            New episodes are flagged `draft: true` — review and flip to `draft: false` (or
+            delete the field) before they go public.
+
+            Existing curated episodes had only their `## Transcript` section appended; their
+            summaries and bibliographies were preserved untouched.
+          add-paths: |
+            src/content/episodes/**
+            .transcripts/**

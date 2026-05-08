@@ -27,3 +27,7 @@ npm-debug.log*
 public/_demo/*.svg
 public/_demo/*.png
 public/_demo/*.html
+
+# Transcript pipeline working files
+.transcripts/audio/
+.transcripts/*.tmp.json
