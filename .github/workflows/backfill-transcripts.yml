@@ -67,7 +67,8 @@ jobs:
 
       - name: Run backfill
         env:
-          ASSEMBLYAI_API_KEY: ${{ secrets.ASSEMBLYAI_API_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           ARGS="--channel '${{ github.event.inputs.channel }}' --max ${{ github.event.inputs.max }}"
           if [ "${{ github.event.inputs.only }}" != "" ]; then
@@ -93,21 +94,23 @@ jobs:
         with:
           branch: claude/transcripts-backfill
           base: claude/doomer-optimism-site-Ime4V
-          commit-message: 'Transcripts backfill via AssemblyAI'
+          commit-message: 'Transcripts backfill via ElevenLabs Scribe + Claude Haiku'
           title: 'Transcripts backfill (${{ github.event.inputs.max }} episodes)'
           body: |
             Auto-generated transcripts batch.
 
             - Source: `${{ github.event.inputs.channel }}`
             - Max processed: `${{ github.event.inputs.max }}`
-            - Engine: AssemblyAI Best (with diarization, auto-chapters, IAB topics)
+            - Engine: ElevenLabs Scribe (transcription + diarization) + Claude Haiku 4.5 (chapters, topics, bibliography, summary, pillar suggestion, pull quotes)
             - Speaker mapping: longest-talker → Ashley Colby Fitzgerald; second → guest from title
 
-            New episodes are flagged `draft: true` — review and flip to `draft: false` (or
-            delete the field) before they go public.
+            New episodes are flagged `draft: true` — review and flip the flag (or
+            delete the field) before they go public. The suggested pillar from
+            Haiku is heuristic; please confirm.
 
-            Existing curated episodes had only their `## Transcript` section appended; their
-            summaries and bibliographies were preserved untouched.
+            Existing curated episodes had only their `## Transcript`, `## Chapters`,
+            and `## Pull quotes` sections appended; their summaries and
+            bibliographies were preserved untouched.
           add-paths: |
             src/content/episodes/**
             .transcripts/**

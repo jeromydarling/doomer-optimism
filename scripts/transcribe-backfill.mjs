@@ -2,27 +2,32 @@
 /**
  * scripts/transcribe-backfill.mjs
  *
- * Pulls the Doomer Optimism YouTube channel, transcribes each episode via
- * AssemblyAI (Best tier, with diarization + auto-chapters), and emits MDX
- * files into src/content/episodes/. Idempotent — cached results in
- * .transcripts/ are reused on rerun.
+ * Two-stage pipeline:
+ *   1. ElevenLabs Scribe transcribes audio with speaker diarization.
+ *   2. Claude Haiku 4.5 enriches the transcript with chapters, key topics,
+ *      book/paper bibliography, suggested pillar, summary in the show's voice,
+ *      and pull quotes.
+ *
+ * Audio source: yt-dlp against the YouTube channel.
+ * Output: idempotent MDX writes into src/content/episodes/, preserving any
+ * hand-curated frontmatter when an episode file already exists.
+ *
+ * Caches per-video JSON in .transcripts/ so reruns skip done work.
  *
  * Usage:
- *   ASSEMBLYAI_API_KEY=... node scripts/transcribe-backfill.mjs \
- *     --channel "https://www.youtube.com/@doomeroptimism" \
- *     --max 300 \
- *     [--dry-run]                # list videos, don't transcribe
- *     [--only=<videoId>]         # process a single episode
- *
- * Designed to run in GitHub Actions; will work locally too if yt-dlp + ffmpeg
- * are on PATH and the API key is set.
+ *   ELEVENLABS_API_KEY=... ANTHROPIC_API_KEY=... \
+ *     node scripts/transcribe-backfill.mjs \
+ *       --channel "https://www.youtube.com/@doomeroptimism" \
+ *       --max 300 \
+ *       [--dry-run] [--only=<videoId>]
  */
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdir, readFile, writeFile, access } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, basename } from 'node:path';
+import { Blob } from 'node:buffer';
 
 const exec = promisify(execFile);
 
@@ -31,21 +36,26 @@ const CHANNEL = args.channel ?? 'https://www.youtube.com/@doomeroptimism';
 const MAX = Number(args.max ?? 500);
 const DRY = !!args['dry-run'];
 const ONLY = args.only ?? null;
-const API_KEY = process.env.ASSEMBLYAI_API_KEY;
 
-if (!DRY && !API_KEY) {
-  console.error('ASSEMBLYAI_API_KEY env var is required (unless --dry-run).');
+const ELEVEN_KEY = process.env.ELEVENLABS_API_KEY;
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+const HAIKU_MODEL = process.env.ANTHROPIC_MODEL ?? 'claude-haiku-4-5-20251001';
+
+if (!DRY && (!ELEVEN_KEY || !ANTHROPIC_KEY)) {
+  console.error('ELEVENLABS_API_KEY and ANTHROPIC_API_KEY are required (unless --dry-run).');
   process.exit(1);
 }
 
 const ROOT = process.cwd();
 const CACHE_DIR = join(ROOT, '.transcripts');
-const AUDIO_DIR = join(ROOT, '.transcripts', 'audio');
+const AUDIO_DIR = join(CACHE_DIR, 'audio');
+const ENRICH_DIR = join(CACHE_DIR, 'enriched');
 const EPISODES_DIR = join(ROOT, 'src', 'content', 'episodes');
 await mkdir(CACHE_DIR, { recursive: true });
 await mkdir(AUDIO_DIR, { recursive: true });
+await mkdir(ENRICH_DIR, { recursive: true });
 
-// ---- Step 1: enumerate the channel via yt-dlp -----------------------------------
+// ---- 1. enumerate channel ----
 log('▶ Enumerating channel:', CHANNEL);
 const listJson = await ytdlp([
   '--flat-playlist',
@@ -58,24 +68,20 @@ const videos = listJson
   .filter(Boolean)
   .map((line) => JSON.parse(line))
   .filter((v) => !ONLY || v.id === ONLY);
-
 log(`  Found ${videos.length} videos.`);
 
-// Existing episode files — we preserve hand-curated frontmatter
 const existing = await loadExistingEpisodes();
 
 const results = [];
 for (const v of videos) {
   try {
-    const r = await processVideo(v);
-    results.push(r);
+    results.push(await processVideo(v));
   } catch (err) {
     log(`  ✖ ${v.id}: ${err.message}`);
     results.push({ id: v.id, title: v.title, error: err.message });
   }
 }
 
-// ---- Summary report -------------------------------------------------------------
 const ok = results.filter((r) => !r.error);
 const failed = results.filter((r) => r.error);
 log('');
@@ -101,7 +107,7 @@ async function processVideo(v) {
     return { id: v.id, title: v.title, slug: baseName, dry: true };
   }
 
-  // 1. Download audio (cached)
+  // 1a. Download audio (cached)
   const audioPath = join(AUDIO_DIR, `${v.id}.m4a`);
   if (!existsSync(audioPath)) {
     log('  • downloading audio…');
@@ -115,30 +121,45 @@ async function processVideo(v) {
     log('  • audio cached');
   }
 
-  // 2. AssemblyAI transcript (cached)
-  const txPath = join(CACHE_DIR, `${v.id}.json`);
-  let transcript;
+  // 1b. ElevenLabs Scribe transcript (cached)
+  const txPath = join(CACHE_DIR, `${v.id}.scribe.json`);
+  let scribe;
   if (existsSync(txPath)) {
-    transcript = JSON.parse(await readFile(txPath, 'utf8'));
-    log('  • transcript cached');
+    scribe = JSON.parse(await readFile(txPath, 'utf8'));
+    log('  • scribe transcript cached');
   } else {
-    log('  • uploading to AssemblyAI…');
-    const uploadUrl = await aaiUpload(audioPath);
-    log('  • requesting transcription…');
-    transcript = await aaiTranscribe(uploadUrl);
-    await writeFile(txPath, JSON.stringify(transcript, null, 2));
-    log('  • transcript saved');
+    log('  • transcribing with ElevenLabs Scribe…');
+    scribe = await scribeTranscribe(audioPath);
+    await writeFile(txPath, JSON.stringify(scribe, null, 2));
   }
 
-  // 3. Build MDX (preserves hand-curated frontmatter when present)
+  const utterances = wordsToUtterances(scribe.words ?? []);
   const guestFromTitle = extractGuestName(v.title);
-  const speakers = mapSpeakers(transcript, guestFromTitle);
+  const speakers = mapSpeakers(utterances, guestFromTitle);
+  const transcriptText = utterances
+    .map((u) => `${speakers[u.speaker] ?? `Speaker ${u.speaker}`} (${formatTimestamp(u.start)}): ${u.text}`)
+    .join('\n\n');
+
+  // 2. Haiku enrichment (cached)
+  const enrichPath = join(ENRICH_DIR, `${v.id}.json`);
+  let enriched;
+  if (existsSync(enrichPath)) {
+    enriched = JSON.parse(await readFile(enrichPath, 'utf8'));
+    log('  • enrichment cached');
+  } else {
+    log('  • enriching with Claude Haiku…');
+    enriched = await enrichWithHaiku({ title: v.title, guest: speakers['B'] ?? guestFromTitle, transcriptText });
+    await writeFile(enrichPath, JSON.stringify(enriched, null, 2));
+  }
+
+  // 3. MDX
   const mdx = await buildMdx({
     video: v,
     number,
     slug,
-    transcript,
+    utterances,
     speakers,
+    enriched,
     existingPath: existing.byNumber.get(number) ?? existing.bySlug.get(slug) ?? null,
   });
   await writeFile(outMdxPath, mdx);
@@ -147,55 +168,159 @@ async function processVideo(v) {
   return { id: v.id, title: v.title, number, path: outMdxPath };
 }
 
-// ---- yt-dlp wrapper -------------------------------------------------------------
-async function ytdlp(args) {
-  const { stdout } = await exec('yt-dlp', args, { maxBuffer: 200 * 1024 * 1024 });
-  return stdout;
+// ---- ElevenLabs Scribe ---------------------------------------------------------
+async function scribeTranscribe(audioPath) {
+  const data = await readFile(audioPath);
+  const form = new FormData();
+  form.append('file', new Blob([data], { type: 'audio/m4a' }), basename(audioPath));
+  form.append('model_id', 'scribe_v1');
+  form.append('diarize', 'true');
+  form.append('timestamps_granularity', 'word');
+  form.append('language_code', 'en');
+
+  const res = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
+    method: 'POST',
+    headers: { 'xi-api-key': ELEVEN_KEY },
+    body: form,
+  });
+  if (!res.ok) throw new Error(`scribe ${res.status}: ${await res.text()}`);
+  return res.json();
 }
 
-// ---- AssemblyAI client ----------------------------------------------------------
-const AAI = 'https://api.assemblyai.com/v2';
-async function aaiUpload(filePath) {
-  const data = await readFile(filePath);
-  const res = await fetch(`${AAI}/upload`, {
-    method: 'POST',
-    headers: { Authorization: API_KEY, 'Transfer-Encoding': 'chunked' },
-    body: data,
-  });
-  if (!res.ok) throw new Error(`upload failed: ${res.status} ${await res.text()}`);
-  const j = await res.json();
-  return j.upload_url;
-}
-
-async function aaiTranscribe(audioUrl) {
-  const res = await fetch(`${AAI}/transcript`, {
-    method: 'POST',
-    headers: { Authorization: API_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      audio_url: audioUrl,
-      speech_model: 'best',
-      speaker_labels: true,
-      auto_chapters: true,
-      iab_categories: true,
-      punctuate: true,
-      format_text: true,
-      language_code: 'en',
-    }),
-  });
-  if (!res.ok) throw new Error(`transcript create failed: ${res.status}`);
-  const { id } = await res.json();
-  // Poll
-  for (let i = 0; i < 600; i++) {
-    await sleep(5000);
-    const p = await fetch(`${AAI}/transcript/${id}`, { headers: { Authorization: API_KEY } });
-    const j = await p.json();
-    if (j.status === 'completed') return j;
-    if (j.status === 'error') throw new Error(`AAI: ${j.error}`);
+function wordsToUtterances(words) {
+  const utt = [];
+  let cur = null;
+  for (const w of words) {
+    if (w.type && w.type !== 'word' && w.type !== 'audio_event') continue;
+    const speaker = w.speaker_id ?? 'A';
+    const text = w.text ?? '';
+    if (!cur || cur.speaker !== speaker) {
+      if (cur) utt.push(cur);
+      cur = { speaker: normalizeSpeakerLabel(speaker), text: text, start: (w.start ?? 0) * 1000, end: (w.end ?? 0) * 1000 };
+    } else {
+      cur.text += (cur.text.endsWith(' ') ? '' : ' ') + text;
+      cur.end = (w.end ?? cur.end) * 1000;
+    }
   }
-  throw new Error('transcription timed out');
+  if (cur) utt.push(cur);
+  // Glue tiny utterances back into neighbors (artifacts of single-word speaker flips)
+  return utt.filter((u) => u.text.trim().length > 1);
 }
 
-// ---- Helpers --------------------------------------------------------------------
+function normalizeSpeakerLabel(id) {
+  // Scribe uses "speaker_0", "speaker_1" — convert to "A", "B", "C", …
+  const m = String(id).match(/(\d+)$/);
+  if (!m) return id;
+  return String.fromCharCode(65 + Number(m[1]));
+}
+
+// ---- Claude Haiku enrichment ---------------------------------------------------
+const SHOW_CONTEXT = `You are processing a transcript from Doomer Optimism, a podcast hosted by Ashley Colby Fitzgerald (PhD, Environmental Sociology; co-founder Rizoma Field School). The show explores how to live well in the age of the Machine. Its intellectual lineage runs through Wendell Berry, Ivan Illich, Christopher Lasch, and Morris Berman. It is rooted in Catholic Social Teaching but is ecumenical in conversation.
+
+The site organizes around six content pillars (use these exact slugs):
+- regenerative-agriculture
+- conservation-environment
+- built-environment
+- technology-ai-transhumanism
+- right-to-repair-surveillance
+- tech-limited-child-rearing
+
+You receive a transcript with speaker labels and timestamps. You return a structured analysis via the provided tool. The summary must be written in the show's voice: clear-eyed about systemic fragility, hopeful about practical community-led work, never glib. Bibliography entries should only include works that are actually mentioned or clearly referenced in the transcript — never invent citations. Pull quotes should be verbatim and self-contained.`;
+
+async function enrichWithHaiku({ title, guest, transcriptText }) {
+  // Truncate very long transcripts to stay within context (Haiku 200k context, but cost grows)
+  const MAX_CHARS = 240_000;
+  const trimmed = transcriptText.length > MAX_CHARS
+    ? transcriptText.slice(0, MAX_CHARS) + '\n\n[...transcript truncated for analysis...]'
+    : transcriptText;
+
+  const tools = [{
+    name: 'record_episode_analysis',
+    description: 'Record the structured analysis of a Doomer Optimism episode.',
+    input_schema: {
+      type: 'object',
+      required: ['summary', 'chapters', 'keyTopics', 'bibliography', 'suggestedPillar', 'pullQuotes'],
+      properties: {
+        summary: { type: 'string', description: 'A 2-paragraph summary in the show\'s voice. ~120-180 words total.' },
+        chapters: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['start', 'headline'],
+            properties: {
+              start: { type: 'string', description: 'Timestamp like "12:34" or "1:02:33".' },
+              headline: { type: 'string' },
+            },
+          },
+        },
+        keyTopics: { type: 'array', items: { type: 'string' }, maxItems: 8 },
+        bibliography: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['title', 'kind'],
+            properties: {
+              title: { type: 'string' },
+              author: { type: 'string' },
+              year: { type: 'number' },
+              kind: { type: 'string', enum: ['book', 'paper', 'article', 'film', 'podcast', 'site'] },
+            },
+          },
+        },
+        suggestedPillar: {
+          type: 'string',
+          enum: [
+            'regenerative-agriculture',
+            'conservation-environment',
+            'built-environment',
+            'technology-ai-transhumanism',
+            'right-to-repair-surveillance',
+            'tech-limited-child-rearing',
+          ],
+        },
+        secondaryPillar: { type: ['string', 'null'] },
+        pullQuotes: { type: 'array', items: { type: 'string' }, maxItems: 4 },
+      },
+    },
+  }];
+
+  const body = {
+    model: HAIKU_MODEL,
+    max_tokens: 4096,
+    system: [
+      // Cache the show context — the same long preamble runs 300 times.
+      { type: 'text', text: SHOW_CONTEXT, cache_control: { type: 'ephemeral' } },
+    ],
+    tools,
+    tool_choice: { type: 'tool', name: 'record_episode_analysis' },
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: `Episode title: ${title}\nGuest (heuristic): ${guest ?? 'unknown'}\n\nTranscript:\n${trimmed}` },
+        ],
+      },
+    ],
+  };
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_KEY,
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'prompt-caching-2024-07-31',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`anthropic ${res.status}: ${await res.text()}`);
+  const j = await res.json();
+  const toolUse = (j.content ?? []).find((c) => c.type === 'tool_use');
+  if (!toolUse) throw new Error('Haiku did not return a tool_use block');
+  return toolUse.input;
+}
+
+// ---- Helpers, MDX generation ---------------------------------------------------
 function parseArgs(argv) {
   const out = {};
   for (let i = 0; i < argv.length; i++) {
@@ -203,9 +328,8 @@ function parseArgs(argv) {
     if (a.startsWith('--')) {
       const eq = a.indexOf('=');
       if (eq >= 0) out[a.slice(2, eq)] = a.slice(eq + 1);
-      else if (argv[i + 1] && !argv[i + 1].startsWith('--')) {
-        out[a.slice(2)] = argv[++i];
-      } else out[a.slice(2)] = true;
+      else if (argv[i + 1] && !argv[i + 1].startsWith('--')) out[a.slice(2)] = argv[++i];
+      else out[a.slice(2)] = true;
     }
   }
   return out;
@@ -220,7 +344,6 @@ function extractEpisodeNumber(title) {
 }
 
 function extractGuestName(title) {
-  // Patterns like "Episode 296 - Peter Allen on …" or "DO 96 - Inez Stepman w/ Ashley"
   const cleaned = title.replace(/^(?:DO|Episode|Ep\.?)\s*\d+\s*[—\-:|]\s*/i, '');
   const beforeWith = cleaned.split(/\s+(?:w\/|with)\s+/i)[0];
   const beforeOn = beforeWith.split(/\s+on\s+/i)[0];
@@ -240,7 +363,7 @@ async function loadExistingEpisodes() {
   const byNumber = new Map();
   const bySlug = new Map();
   try {
-    const entries = await (await import('node:fs/promises')).readdir(EPISODES_DIR);
+    const entries = await readdir(EPISODES_DIR);
     for (const f of entries) {
       if (!f.endsWith('.mdx')) continue;
       const m = f.match(/^(\d+)-(.+)\.mdx$/);
@@ -253,13 +376,9 @@ async function loadExistingEpisodes() {
   return { byNumber, bySlug };
 }
 
-function mapSpeakers(transcript, guestName) {
-  // Sum speaking time per speaker label (A, B, C, …)
-  const utt = transcript.utterances ?? [];
+function mapSpeakers(utterances, guestName) {
   const totals = new Map();
-  for (const u of utt) {
-    totals.set(u.speaker, (totals.get(u.speaker) ?? 0) + (u.end - u.start));
-  }
+  for (const u of utterances) totals.set(u.speaker, (totals.get(u.speaker) ?? 0) + (u.end - u.start));
   const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]);
   const map = {};
   ranked.forEach(([label], i) => {
@@ -270,12 +389,7 @@ function mapSpeakers(transcript, guestName) {
   return map;
 }
 
-async function buildMdx({ video, number, slug, transcript, speakers, existingPath }) {
-  const utterances = transcript.utterances ?? [];
-  const chapters = transcript.chapters ?? [];
-  const summary = transcript.summary ?? '';
-
-  // Build the readable transcript body
+async function buildMdx({ video, number, slug, utterances, speakers, enriched, existingPath }) {
   const transcriptBody = utterances
     .map((u) => {
       const ts = formatTimestamp(u.start);
@@ -284,42 +398,42 @@ async function buildMdx({ video, number, slug, transcript, speakers, existingPat
     })
     .join('\n\n');
 
-  // Chapters → bibliography seeds (we'll let the human curate, just surface chapter titles)
-  const chaptersBlock = chapters.length
-    ? '\n## Chapters\n\n' + chapters.map((c) => `- **${formatTimestamp(c.start)}** — ${c.headline}`).join('\n') + '\n'
+  const chaptersBlock = enriched.chapters?.length
+    ? '\n## Chapters\n\n' + enriched.chapters.map((c) => `- **${c.start}** — ${c.headline}`).join('\n') + '\n'
     : '';
 
-  // Try to preserve the existing curated frontmatter when we have one
+  const pullQuotesBlock = enriched.pullQuotes?.length
+    ? '\n## Pull quotes\n\n' + enriched.pullQuotes.map((q) => `> ${q}`).join('\n\n') + '\n'
+    : '';
+
   if (existingPath && existsSync(existingPath)) {
     const raw = await readFile(existingPath, 'utf8');
     const { frontmatter, body } = splitFrontmatter(raw);
-    // Only update transcript; only inject chapters if not already there
-    const newFrontmatter = upsertFrontmatterField(frontmatter, 'transcript', `|\n  ${escapeYaml(summarizeForFrontmatter(transcriptBody))}`);
-    const newBody = ensureTranscriptSection(body, transcriptBody, chaptersBlock);
-    return `---\n${newFrontmatter}\n---\n${newBody}`;
+    const newBody = body.includes('## Transcript')
+      ? body
+      : `${body.trim()}\n${chaptersBlock}${pullQuotesBlock}\n## Transcript\n\n${transcriptBody}\n`;
+    return `---\n${frontmatter}\n---\n${newBody}`;
   }
 
-  // New file — fresh frontmatter
   const guest = speakers['B'] ?? speakers['A'] ?? 'Unknown Guest';
   const fm = [
-    `number: ${number ?? '# TODO: assign episode number'}`,
+    `number: ${number ?? '# TODO'}`,
     `title: ${yamlString(stripEpisodePrefix(video.title))}`,
     `guest: ${yamlString(guest)}`,
     `pubDate: ${formatDate(video.upload_date ?? video.timestamp ?? new Date())}`,
     `durationSeconds: ${Math.round(video.duration ?? 0)}`,
-    `pillar: technology-ai-transhumanism # TODO: assign correct pillar`,
-    `summary: >-\n  ${yamlMultiline(summary || video.title)}`,
+    `pillar: ${enriched.suggestedPillar ?? 'technology-ai-transhumanism # TODO: review'}`,
+    enriched.secondaryPillar ? `secondaryPillar: ${enriched.secondaryPillar}` : null,
+    `summary: >-\n  ${escapeYamlMultiline(enriched.summary ?? video.title)}`,
     `youtubeId: ${video.id}`,
-    `bibliography: []`,
+    `bibliography:`,
+    ...(enriched.bibliography ?? []).map((b) =>
+      `  - { title: ${yamlString(b.title)}${b.author ? `, author: ${yamlString(b.author)}` : ''}${b.year ? `, year: ${b.year}` : ''}, kind: ${b.kind} }`
+    ),
     `draft: true`,
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 
-  return `---\n${fm}\n---\n\n## Summary\n\n${summary || '*Auto-generated from chapters; please edit before publishing.*'}\n${chaptersBlock}\n## Transcript\n\n${transcriptBody}\n`;
-}
-
-function ensureTranscriptSection(body, transcriptBody, chaptersBlock) {
-  if (body.includes('## Transcript')) return body; // already present, leave alone
-  return `${body.trim()}\n${chaptersBlock}\n## Transcript\n\n${transcriptBody}\n`;
+  return `---\n${fm}\n---\n\n## Summary\n\n${enriched.summary ?? '*Auto-generated; please edit before publishing.*'}\n${chaptersBlock}${pullQuotesBlock}\n## Transcript\n\n${transcriptBody}\n`;
 }
 
 function splitFrontmatter(raw) {
@@ -328,20 +442,10 @@ function splitFrontmatter(raw) {
   return { frontmatter: m[1], body: m[2] };
 }
 
-function upsertFrontmatterField(fm, key, value) {
-  const re = new RegExp(`^${key}:.*$`, 'm');
-  return re.test(fm) ? fm : `${fm}\n${key}: ${value}`;
-}
-
-function summarizeForFrontmatter() {
-  // We don't actually inline the full transcript into frontmatter — the body holds it.
-  // This stub exists for symmetry; returning empty disables the field write.
-  return '';
-}
-
-function escapeYaml(s) { return String(s).replace(/\n/g, '\n  '); }
 function yamlString(s) { return JSON.stringify(String(s ?? '').replace(/\s+/g, ' ').trim()); }
-function yamlMultiline(s) { return String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, 500); }
+function escapeYamlMultiline(s) {
+  return String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, 800).replace(/\n/g, '\n  ');
+}
 function stripEpisodePrefix(t) { return t.replace(/^(?:DO|Episode|Ep\.?)\s*\d+\s*[—\-:|]\s*/i, '').trim(); }
 function formatDate(ymd) {
   if (typeof ymd === 'string' && /^\d{8}$/.test(ymd)) return `${ymd.slice(0,4)}-${ymd.slice(4,6)}-${ymd.slice(6,8)}`;
@@ -357,5 +461,8 @@ function formatTimestamp(ms) {
     ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
     : `${m}:${String(s).padStart(2, '0')}`;
 }
-function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+async function ytdlp(args) {
+  const { stdout } = await exec('yt-dlp', args, { maxBuffer: 200 * 1024 * 1024 });
+  return stdout;
+}
 function log(...a) { console.log(...a); }

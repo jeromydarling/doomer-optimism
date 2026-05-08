@@ -46,11 +46,12 @@ Static site for the Doomer Optimism podcast (host: Ashley Colby Fitzgerald, co-f
 The schema is RSS-ready. When the real Doomer Optimism feed URL is in hand, add a script `scripts/import-rss.mjs` that fetches the feed, transforms each `<item>` into an MDX file under `src/content/episodes/`, and either commits or PRs the result. The file format is intentionally flat to make this trivial.
 
 ## Transcripts pipeline (live)
-- `scripts/transcribe-backfill.mjs` — pulls the YouTube channel via yt-dlp, transcribes via AssemblyAI Best (diarization + auto-chapters), writes MDX preserving curated frontmatter.
+- `scripts/transcribe-backfill.mjs` — pulls the YouTube channel via yt-dlp, transcribes via **ElevenLabs Scribe** (with diarization), then enriches each transcript via **Claude Haiku 4.5** (chapters, key topics, bibliography, suggested pillar, summary, pull quotes). Writes MDX preserving curated frontmatter.
 - `.github/workflows/backfill-transcripts.yml` — `workflow_dispatch` action that runs the backfill in CI and opens a PR with the results.
-- Requires `ASSEMBLYAI_API_KEY` repo secret. Caches per-video JSON in `.transcripts/` so reruns are cheap.
+- Requires `ELEVENLABS_API_KEY` and `ANTHROPIC_API_KEY` repo secrets.
+- Caches per-video JSON in `.transcripts/` and per-video enrichment in `.transcripts/enriched/` so reruns are cheap.
 - Speaker mapping: longest cumulative talker → host (Ashley); second-longest → guest extracted from title; rest are `Speaker C/D/...` for human review.
-- New episodes land with `draft: true` and a `# TODO` pillar — review-then-publish flow.
+- New episodes land with `draft: true` — review-then-publish flow.
 
 ## CMS layer (future)
 Static content collections support adding a Git-based admin UI later (Decap CMS / Sveltia CMS) so guest writers can author companion essays without touching the repo. The static deploy stays unchanged — the CMS commits markdown back to this same tree.
