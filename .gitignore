@@ -22,3 +22,8 @@ npm-debug.log*
 
 # Misc
 .claude/settings.local.json
+
+# Hedcut pipeline outputs (regenerated locally)
+public/_demo/*.svg
+public/_demo/*.png
+public/_demo/*.html
