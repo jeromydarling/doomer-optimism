@@ -1,0 +1,46 @@
+---
+import { getCollection, getEntry } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { withBase, formatDate } from '../../lib/site';
+
+export async function getStaticPaths() {
+  const articles = await getCollection('articles', (a) => !a.data.draft);
+  return articles.map((a) => ({ params: { slug: a.slug }, props: { entry: a } }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await entry.render();
+const data = entry.data;
+const pillar = await getEntry(data.pillar);
+const episode = data.episode ? await getEntry(data.episode) : null;
+---
+
+<BaseLayout title={data.title} description={data.summary} ogType="article">
+  <article class="container-prose pt-12 md:pt-20 pb-24" data-pagefind-body>
+    <p class="smallcaps mb-3">
+      <a href={withBase('/library')} class="!border-b-0 hover:!text-terracotta-500">Research library</a>
+      <span class="mx-2 text-umber-100/50">·</span>
+      <a href={withBase(`/pillars/${pillar.slug}`)} class="!border-b-0 hover:!text-terracotta-500">{pillar.data.title}</a>
+    </p>
+    <h1 class="!text-[clamp(2.4rem,5.5vw,4rem)] mb-3">{data.title}</h1>
+    {data.subtitle && <p class="font-serif italic text-2xl text-umber-100 mb-4">{data.subtitle}</p>}
+    <p class="smallcaps mb-10">{data.author} · {formatDate(data.pubDate)} · {data.readingMinutes} min read</p>
+
+    <div class="prose-content max-w-prose">
+      <p class="drop-cap text-lg leading-relaxed text-umber-200 mb-8" data-pagefind-meta="summary">
+        {data.summary}
+      </p>
+      <Content />
+    </div>
+
+    {episode && (
+      <aside class="mt-16 pt-8 border-t border-umber-300/15">
+        <p class="smallcaps mb-2">Listen to the episode</p>
+        <a href={withBase(`/episodes/${episode.slug}`)} class="!border-b-0 group">
+          <p class="font-display text-2xl !text-umber-300 group-hover:!text-terracotta-500">No. {episode.data.number} — {episode.data.title}</p>
+          <p class="smallcaps mt-1">with {episode.data.guest}</p>
+        </a>
+      </aside>
+    )}
+  </article>
+</BaseLayout>

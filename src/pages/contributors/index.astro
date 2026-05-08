@@ -1,0 +1,25 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ContributorCard from '../../components/ContributorCard.astro';
+
+const contributors = (await getCollection('contributors')).sort((a, b) => {
+  if (a.data.featured !== b.data.featured) return a.data.featured ? -1 : 1;
+  return a.data.name.localeCompare(b.data.name);
+});
+---
+
+<BaseLayout title="Contributors" description="Hosts, lead voices, and recurring guests of Doomer Optimism.">
+  <div class="container-wide pt-12 md:pt-20 pb-12">
+    <p class="smallcaps mb-3">The People</p>
+    <h1>Contributors</h1>
+    <p class="font-serif text-xl text-umber-100 max-w-2xl mt-4">
+      Hosts, lead voices, and recurring guests. Portraits are commissioned in the
+      WSJ hedcut tradition; the engraved set arrives with the relaunch.
+    </p>
+  </div>
+
+  <div class="container-wide pb-24 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-12">
+    {contributors.map((c) => <ContributorCard contributor={c} />)}
+  </div>
+</BaseLayout>

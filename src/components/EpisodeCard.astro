@@ -1,0 +1,78 @@
+---
+import { getEntry } from 'astro:content';
+import { formatDate, formatDuration, withBase } from '../lib/site';
+import type { CollectionEntry } from 'astro:content';
+
+interface Props {
+  episode: CollectionEntry<'episodes'>;
+  variant?: 'card' | 'row' | 'feature';
+}
+const { episode, variant = 'card' } = Astro.props;
+const pillar = await getEntry(episode.data.pillar);
+const href = withBase(`/episodes/${episode.slug}`);
+const ep = episode.data;
+---
+
+{variant === 'feature' && (
+  <article class="grid md:grid-cols-5 gap-8 md:gap-12 items-start py-10 border-b border-umber-300/15">
+    <div class="md:col-span-2">
+      <div class="aspect-[3/2] bg-parchment-200/70 border border-umber-300/20 flex items-center justify-center relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-br from-terracotta-500/10 via-transparent to-moss-500/10"></div>
+        <div class="text-center px-6 relative">
+          <p class="smallcaps mb-2">Episode {ep.number}</p>
+          <p class="font-display text-3xl text-umber-300 leading-tight">{ep.title}</p>
+        </div>
+      </div>
+    </div>
+    <div class="md:col-span-3">
+      <div class="flex items-center gap-3 mb-3">
+        <span class="pillar-pill">{pillar?.data.shortTitle ?? pillar?.data.title}</span>
+        <span class="smallcaps">{formatDate(ep.pubDate)}</span>
+      </div>
+      <h2 class="!text-3xl md:!text-4xl mb-3">
+        <a href={href} class="!border-b-0 !text-umber-300 hover:!text-terracotta-500">{ep.title}</a>
+      </h2>
+      <p class="smallcaps mb-4">with {ep.guest} · {formatDuration(ep.durationSeconds)}</p>
+      <p class="text-umber-100 leading-relaxed mb-5">{ep.summary}</p>
+      <a href={href} class="btn">Listen & read →</a>
+    </div>
+  </article>
+)}
+
+{variant === 'card' && (
+  <article class="group flex flex-col h-full">
+    <a href={href} class="!border-b-0 block">
+      <div class="aspect-[4/3] bg-parchment-200/70 border border-umber-300/20 flex items-center justify-center relative overflow-hidden mb-4 group-hover:border-terracotta-500/60 transition-colors">
+        <div class="absolute inset-0 bg-gradient-to-br from-terracotta-500/8 via-transparent to-moss-500/8"></div>
+        <div class="absolute top-3 left-3 smallcaps !text-umber-100">№ {ep.number}</div>
+        <div class="text-center px-4 relative">
+          <p class="font-display text-xl md:text-2xl text-umber-300 leading-tight">{ep.title}</p>
+        </div>
+      </div>
+    </a>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="pillar-pill">{pillar?.data.shortTitle ?? pillar?.data.title}</span>
+    </div>
+    <h3 class="!text-xl mb-1.5 leading-snug">
+      <a href={href} class="!border-b-0 !text-umber-300 hover:!text-terracotta-500">{ep.title}</a>
+    </h3>
+    <p class="smallcaps mb-2">with {ep.guest}</p>
+    <p class="text-umber-100 text-[0.95rem] leading-relaxed line-clamp-3">{ep.summary}</p>
+    <p class="smallcaps mt-3 !text-[0.65rem] !text-umber-100/80">{formatDate(ep.pubDate)} · {formatDuration(ep.durationSeconds)}</p>
+  </article>
+)}
+
+{variant === 'row' && (
+  <article class="grid grid-cols-[auto_1fr_auto] gap-4 md:gap-6 items-baseline py-5 border-b border-umber-300/15 last:border-b-0">
+    <span class="font-display text-2xl text-umber-100/70 tabular-nums w-12">{String(ep.number).padStart(3, '0')}</span>
+    <div>
+      <h3 class="!text-lg md:!text-xl mb-1 leading-snug">
+        <a href={href} class="!border-b-0 !text-umber-300 hover:!text-terracotta-500">{ep.title}</a>
+      </h3>
+      <p class="smallcaps !text-umber-100">
+        with {ep.guest} · <span class="lowercase tracking-normal italic font-serif">{pillar?.data.shortTitle ?? pillar?.data.title}</span>
+      </p>
+    </div>
+    <span class="smallcaps !text-umber-100 hidden sm:inline">{formatDate(ep.pubDate)}</span>
+  </article>
+)}

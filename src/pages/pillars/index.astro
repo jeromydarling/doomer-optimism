@@ -1,0 +1,30 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PillarCard from '../../components/PillarCard.astro';
+
+const pillars = (await getCollection('pillars')).sort((a, b) => a.data.order - b.data.order);
+const episodes = await getCollection('episodes', (e) => !e.data.draft);
+const counts = Object.fromEntries(
+  pillars.map((p) => [
+    p.slug,
+    episodes.filter((e) => e.data.pillar.slug === p.slug || e.data.secondaryPillar?.slug === p.slug).length,
+  ]),
+);
+---
+
+<BaseLayout title="The Six Pillars" description="The six interlocking domains the Doomer Optimism conversation organizes around.">
+  <div class="container-wide pt-12 md:pt-20 pb-8">
+    <p class="smallcaps mb-3">Content Architecture</p>
+    <h1>The six pillars</h1>
+    <p class="font-serif text-xl text-umber-100 max-w-2xl mt-4">
+      Six interlocking domains. Each has its own lead voices, its own practitioners,
+      and its own slow-built reading list — together they map what it takes to live
+      well in the age of the Machine.
+    </p>
+  </div>
+
+  <div class="container-wide pb-24 grid md:grid-cols-2 gap-x-10 border-t border-b border-umber-300/15 divide-y md:divide-y-0 divide-umber-300/15">
+    {pillars.map((p) => <PillarCard pillar={p} episodeCount={counts[p.slug]} />)}
+  </div>
+</BaseLayout>

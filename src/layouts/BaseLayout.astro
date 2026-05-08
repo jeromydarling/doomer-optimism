@@ -1,0 +1,56 @@
+---
+import '../styles/global.css';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import { site, withBase } from '../lib/site';
+
+interface Props {
+  title?: string;
+  description?: string;
+  ogType?: 'website' | 'article';
+  noIndex?: boolean;
+  bare?: boolean;
+}
+
+const {
+  title,
+  description = site.description,
+  ogType = 'website',
+  noIndex = false,
+  bare = false,
+} = Astro.props;
+
+const fullTitle = title ? `${title} — ${site.title}` : `${site.title} — ${site.tagline}`;
+const canonical = new URL(Astro.url.pathname, Astro.site ?? Astro.url).toString();
+const faviconHref = withBase('/favicon.svg');
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#F4ECDB" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    {noIndex && <meta name="robots" content="noindex" />}
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" href={faviconHref} type="image/svg+xml" />
+    <meta property="og:type" content={ogType} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="alternate" type="application/rss+xml" title={`${site.title} — Site updates`} href={withBase('/rss.xml')} />
+  </head>
+  <body class="min-h-screen flex flex-col">
+    <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:bg-umber-300 focus:text-parchment-100 focus:px-3 focus:py-2 focus:z-50">
+      Skip to content
+    </a>
+    {!bare && <SiteHeader />}
+    <main id="main" class="flex-1">
+      <slot />
+    </main>
+    {!bare && <SiteFooter />}
+  </body>
+</html>

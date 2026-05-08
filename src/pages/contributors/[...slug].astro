@@ -1,0 +1,71 @@
+---
+import { getCollection, getEntry } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import EpisodeCard from '../../components/EpisodeCard.astro';
+import HedcutPlaceholder from '../../components/HedcutPlaceholder.astro';
+import { withBase } from '../../lib/site';
+
+export async function getStaticPaths() {
+  const contributors = await getCollection('contributors');
+  return contributors.map((c) => ({ params: { slug: c.slug }, props: { entry: c } }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await entry.render();
+
+const pillarRefs = entry.data.pillars ?? [];
+const pillars = await Promise.all(pillarRefs.map((p) => getEntry(p)));
+
+const allEpisodes = (await getCollection('episodes', (e) => !e.data.draft))
+  .filter((e) => e.data.guestSlug?.slug === entry.slug)
+  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+---
+
+<BaseLayout title={entry.data.name} description={entry.data.bio}>
+  <div class="container-wide pt-12 md:pt-20 pb-12 grid md:grid-cols-[260px_1fr] gap-10 items-start">
+    <div class="bg-parchment-200/50 border border-umber-300/15 p-6 max-w-xs">
+      <HedcutPlaceholder name={entry.data.name} size={220} />
+    </div>
+    <div>
+      <p class="smallcaps mb-3">
+        <a href={withBase('/contributors')} class="!border-b-0 hover:!text-terracotta-500">All contributors</a>
+      </p>
+      <h1 class="mb-3">{entry.data.name}</h1>
+      {entry.data.role && <p class="smallcaps mb-1">{entry.data.role}</p>}
+      {entry.data.affiliation && <p class="italic font-serif text-xl text-umber-100 mb-6">{entry.data.affiliation}</p>}
+      <p class="font-serif text-lg text-umber-200 max-w-prose leading-relaxed">{entry.data.bio}</p>
+
+      {pillars.length > 0 && (
+        <div class="mt-6 flex flex-wrap gap-2">
+          {pillars.map((p) => (
+            <a href={withBase(`/pillars/${p.slug}`)} class="pillar-pill !border-b-0 hover:!border-terracotta-500/60">{p.data.title}</a>
+          ))}
+        </div>
+      )}
+
+      {entry.data.links && (
+        <ul class="mt-6 space-y-1">
+          {entry.data.links.website && <li><a href={entry.data.links.website}>{entry.data.links.website.replace(/^https?:\/\//, '')}</a></li>}
+          {entry.data.links.substack && <li><a href={entry.data.links.substack}>Substack</a></li>}
+          {entry.data.links.wikipedia && <li><a href={entry.data.links.wikipedia}>Wikipedia</a></li>}
+        </ul>
+      )}
+    </div>
+  </div>
+
+  <div class="container-wide pb-12">
+    <div class="prose-content max-w-prose">
+      <Content />
+    </div>
+  </div>
+
+  {allEpisodes.length > 0 && (
+    <section class="container-wide pb-24 pt-8 border-t border-umber-300/15">
+      <p class="smallcaps mb-3">Appearances</p>
+      <h2 class="!text-2xl mb-6">{allEpisodes.length} episode{allEpisodes.length === 1 ? '' : 's'}</h2>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-12">
+        {allEpisodes.map((e) => <EpisodeCard episode={e} />)}
+      </div>
+    </section>
+  )}
+</BaseLayout>

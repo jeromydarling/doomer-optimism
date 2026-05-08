@@ -1,0 +1,56 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { formatDate } from '../lib/site';
+
+const events = (await getCollection('events')).sort((a, b) => a.data.startDate.valueOf() - b.data.startDate.valueOf());
+const upcoming = events.filter((e) => e.data.status !== 'past');
+const past = events.filter((e) => e.data.status === 'past');
+---
+
+<BaseLayout title="Events" description="Annual gatherings and pilot recording series — convening the Doomer Optimism network in person and online.">
+  <div class="container-wide pt-12 md:pt-20 pb-12">
+    <p class="smallcaps mb-3">Annual Convenings</p>
+    <h1>Events</h1>
+    <p class="font-serif text-xl text-umber-100 max-w-2xl mt-4">
+      One or two high-impact in-person gatherings each year, plus pilot recording
+      runs and online panels — designed for cross-pollination, skill-sharing, and
+      the patient work of network-building.
+    </p>
+  </div>
+
+  <section class="container-wide pb-16">
+    <p class="smallcaps mb-3">Upcoming</p>
+    <ul class="border-t border-umber-300/15">
+      {upcoming.map((e) => (
+        <li class="grid grid-cols-1 sm:grid-cols-[200px_1fr_auto] gap-3 sm:gap-6 items-baseline py-6 border-b border-umber-300/15">
+          <div>
+            <p class="font-display text-2xl text-umber-300">{formatDate(e.data.startDate)}</p>
+            {e.data.endDate && <p class="smallcaps">through {formatDate(e.data.endDate)}</p>}
+          </div>
+          <div>
+            <h3 class="!text-xl mb-1">{e.data.title}</h3>
+            <p class="italic text-umber-100">{e.data.location}</p>
+            <p class="text-umber-200 mt-2 max-w-prose">{e.data.summary}</p>
+          </div>
+          {e.data.registrationUrl && (
+            <a href={e.data.registrationUrl} class="btn !text-[0.7rem] sm:self-center">Register</a>
+          )}
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  {past.length > 0 && (
+    <section class="container-wide pb-24">
+      <p class="smallcaps mb-3">Past</p>
+      <ul class="border-t border-umber-300/15">
+        {past.map((e) => (
+          <li class="py-4 border-b border-umber-300/15">
+            <p class="font-display text-xl text-umber-100">{e.data.title} <span class="smallcaps ml-2">{formatDate(e.data.startDate)}</span></p>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
+</BaseLayout>

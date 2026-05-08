@@ -1,0 +1,17 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { withBase } from '../lib/site';
+---
+
+<BaseLayout title="Lost in the wilderness" noIndex>
+  <div class="container-prose text-center pt-24 pb-24">
+    <p class="smallcaps mb-3">404</p>
+    <h1 class="mb-4">Lost in the wilderness.</h1>
+    <p class="font-serif text-xl text-umber-100 mx-auto max-w-prose mb-8 leading-relaxed">
+      The page you are looking for has either moved, been retired, or never existed.
+      Try the <a href={withBase('/episodes')}>archive</a>, the
+      <a href={withBase('/library')}>research library</a>, or the
+      <a href={withBase('/')}>front page</a>.
+    </p>
+  </div>
+</BaseLayout>

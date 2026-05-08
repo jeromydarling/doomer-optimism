@@ -1,0 +1,109 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { withBase, formatDate } from '../../lib/site';
+
+const articles = (await getCollection('articles', (a) => !a.data.draft))
+  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+
+const episodes = await getCollection('episodes', (e) => !e.data.draft);
+const allBiblio = episodes.flatMap((e) =>
+  e.data.bibliography.map((b) => ({ ...b, episodeSlug: e.slug, episodeNumber: e.data.number, episodeTitle: e.data.title }))
+);
+const seen = new Set<string>();
+const uniqueBiblio = allBiblio.filter((b) => {
+  const key = `${b.title}|${b.author ?? ''}`.toLowerCase();
+  if (seen.has(key)) return false;
+  seen.add(key);
+  return true;
+});
+const byKind = {
+  book: uniqueBiblio.filter((b) => b.kind === 'book').sort((a, b) => a.title.localeCompare(b.title)),
+  paper: uniqueBiblio.filter((b) => b.kind === 'paper'),
+  article: uniqueBiblio.filter((b) => b.kind === 'article'),
+  film: uniqueBiblio.filter((b) => b.kind === 'film'),
+  podcast: uniqueBiblio.filter((b) => b.kind === 'podcast'),
+  site: uniqueBiblio.filter((b) => b.kind === 'site'),
+};
+---
+
+<BaseLayout title="Research Library" description="The categorized bibliography from every Doomer Optimism episode — books, papers, films, and field-tested resources, made searchable.">
+  <div class="container-wide pt-12 md:pt-20 pb-6">
+    <p class="smallcaps mb-3">A Living Knowledge Hub</p>
+    <h1>The research library</h1>
+    <p class="font-serif text-xl text-umber-100 max-w-3xl mt-4">
+      Every book, paper, film, and resource referenced across {episodes.length}+
+      conversations — categorized, searchable, and traceable back to the episode
+      where it came up. Companion essays sit alongside the bibliography so you can
+      read deeper into any thread.
+    </p>
+  </div>
+
+  <div class="container-wide pb-12">
+    <div id="search" class="mt-2"></div>
+  </div>
+
+  {articles.length > 0 && (
+    <section class="container-wide pb-16">
+      <p class="smallcaps mb-3">Companion Essays</p>
+      <h2 class="!text-2xl mb-6">Long-form, episode-paired</h2>
+      <ul class="grid md:grid-cols-2 gap-8">
+        {articles.map((a) => (
+          <li>
+            <a href={withBase(`/library/${a.slug}`)} class="!border-b-0 group block">
+              <h3 class="!text-2xl !text-umber-300 group-hover:!text-terracotta-500 leading-snug mb-1">{a.data.title}</h3>
+              {a.data.subtitle && <p class="italic text-umber-100 mb-2">{a.data.subtitle}</p>}
+              <p class="text-umber-200 leading-relaxed">{a.data.summary}</p>
+              <p class="smallcaps mt-3">{a.data.author} · {formatDate(a.data.pubDate)} · {a.data.readingMinutes} min</p>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
+
+  <section class="container-wide pb-24">
+    <p class="smallcaps mb-3">Catalogued Sources</p>
+    <h2 class="!text-2xl mb-8">Bibliography across the archive</h2>
+
+    {(['book', 'paper', 'article', 'film', 'podcast', 'site'] as const).map((kind) => {
+      const items = byKind[kind];
+      if (!items.length) return null;
+      const heading = { book: 'Books', paper: 'Papers', article: 'Articles', film: 'Films', podcast: 'Podcasts', site: 'Sites & projects' }[kind];
+      return (
+        <div class="mb-12">
+          <h3 class="!text-xl mb-4 pb-2 border-b border-umber-300/15">{heading} <span class="smallcaps !text-[0.65rem] !text-umber-100 ml-2">({items.length})</span></h3>
+          <ul class="grid md:grid-cols-2 gap-x-8 gap-y-2">
+            {items.map((b) => (
+              <li class="text-umber-200 text-[0.95rem] leading-relaxed">
+                {b.href ? <a href={b.href} class="!border-b-0 hover:!text-terracotta-500 italic">{b.title}</a> : <span class="italic">{b.title}</span>}
+                {b.author && <span> — {b.author}</span>}
+                {b.year && <span class="text-umber-100">, {b.year}</span>}
+                <a class="smallcaps !text-[0.6rem] ml-2 !border-b-0 hover:!text-terracotta-500" href={withBase(`/episodes/${b.episodeSlug}`)}>Ep {b.episodeNumber}</a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    })}
+  </section>
+
+  <link rel="stylesheet" href={withBase('/pagefind/pagefind-ui.css')} />
+  <script is:inline src={withBase('/pagefind/pagefind-ui.js')}></script>
+  <script is:inline define:vars={{ base: withBase('/pagefind/') }}>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (typeof PagefindUI === 'undefined') {
+        const el = document.getElementById('search');
+        if (el) el.innerHTML = '<p class="smallcaps">Search builds with the production deploy. Use the sections below for now.</p>';
+        return;
+      }
+      new PagefindUI({
+        element: '#search',
+        showSubResults: true,
+        showImages: false,
+        bundlePath: base,
+        translations: { placeholder: 'Search transcripts, bibliographies, essays…' },
+      });
+    });
+  </script>
+</BaseLayout>

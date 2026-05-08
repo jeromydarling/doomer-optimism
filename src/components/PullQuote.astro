@@ -1,0 +1,10 @@
+---
+interface Props { attribution?: string; }
+const { attribution } = Astro.props;
+---
+<figure class="my-12 max-w-2xl mx-auto text-center">
+  <blockquote class="!border-l-0 !pl-0 !italic font-display !text-2xl md:!text-3xl !text-umber-300 leading-snug">
+    <slot />
+  </blockquote>
+  {attribution && <figcaption class="mt-4">— {attribution}</figcaption>}
+</figure>
