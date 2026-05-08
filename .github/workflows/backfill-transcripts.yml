@@ -93,7 +93,7 @@ jobs:
         uses: peter-evans/create-pull-request@v6
         with:
           branch: claude/transcripts-backfill
-          base: claude/doomer-optimism-site-Ime4V
+          base: main
           commit-message: 'Transcripts backfill via ElevenLabs Scribe + Claude Haiku'
           title: 'Transcripts backfill (${{ github.event.inputs.max }} episodes)'
           body: |

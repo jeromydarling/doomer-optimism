@@ -3,7 +3,6 @@ name: Deploy site to GitHub Pages
 on:
   push:
     branches:
-      - claude/doomer-optimism-site-Ime4V
       - main
   workflow_dispatch:
 

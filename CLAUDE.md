@@ -1,6 +1,6 @@
 # Doomer Optimism — site
 
-Static site for the Doomer Optimism podcast (host: Ashley Colby Fitzgerald, co-founder Rizoma Field School). Deployed to GitHub Pages from the `claude/doomer-optimism-site-Ime4V` branch via GitHub Actions. The site is the **hub** in a hub-and-spoke distribution model — full episode archive, categorized research library, contributor pages, events, and the searchable bibliography across all episodes.
+Static site for the Doomer Optimism podcast (host: Ashley Colby Fitzgerald, co-founder Rizoma Field School). Deployed to GitHub Pages from `main` via GitHub Actions. The site is the **hub** in a hub-and-spoke distribution model — full episode archive, categorized research library, contributor pages, events, and the searchable bibliography across all episodes.
 
 ## Stack
 - **Astro 5** (content collections + MDX), Tailwind CSS, `@fontsource` for self-hosted serif type
@@ -40,7 +40,7 @@ Static site for the Doomer Optimism podcast (host: Ashley Colby Fitzgerald, co-f
 2. The `pillar` field is a `reference('pillars')` — use the pillar's filename slug (e.g., `regenerative-agriculture`).
 3. If the guest has a contributor page, set `guestSlug` to the contributor's filename slug.
 4. Bibliography is an array of `{ title, author?, year?, href?, kind }`.
-5. Push to `claude/doomer-optimism-site-Ime4V` — Actions builds and deploys to Pages.
+5. Push to `main` — Actions builds and deploys to Pages.
 
 ## RSS ingestion (future)
 The schema is RSS-ready. When the real Doomer Optimism feed URL is in hand, add a script `scripts/import-rss.mjs` that fetches the feed, transforms each `<item>` into an MDX file under `src/content/episodes/`, and either commits or PRs the result. The file format is intentionally flat to make this trivial.
@@ -59,4 +59,3 @@ Static content collections support adding a Git-based admin UI later (Decap CMS 
 ## Don't
 - Don't add backwards-compatibility shims. We're pre-launch; just change the code.
 - Don't write planning/decision docs to disk unless asked.
-- Don't push to `main` from claude — work happens on `claude/doomer-optimism-site-Ime4V`.
