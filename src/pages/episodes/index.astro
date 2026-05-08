@@ -1,0 +1,61 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import EpisodeCard from '../../components/EpisodeCard.astro';
+import { withBase } from '../../lib/site';
+
+const episodes = (await getCollection('episodes', (e) => !e.data.draft))
+  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+
+const pillars = (await getCollection('pillars')).sort((a, b) => a.data.order - b.data.order);
+---
+
+<BaseLayout title="Episodes" description="The full archive of Doomer Optimism episodes — 300+ conversations on living well in the age of the Machine.">
+  <div class="container-wide pt-12 md:pt-20 pb-6">
+    <p class="smallcaps mb-3">The Archive</p>
+    <h1>Episodes</h1>
+    <p class="font-serif text-xl text-umber-100 max-w-2xl mt-4">
+      Every conversation, organized by date. Filter by pillar to follow a single thread,
+      or use the search to find a guest, a book, or a phrase.
+    </p>
+  </div>
+
+  <div class="container-wide pt-2 pb-4 flex flex-wrap gap-2 items-center" data-filter-bar>
+    <span class="smallcaps mr-2">Filter</span>
+    <button type="button" data-filter="all" class="pillar-pill !cursor-pointer hover:!border-terracotta-500/60 aria-[pressed=true]:!bg-umber-300 aria-[pressed=true]:!text-parchment-100 aria-[pressed=true]:!border-umber-300" aria-pressed="true">All</button>
+    {pillars.map((p) => (
+      <button type="button" data-filter={p.slug} class="pillar-pill !cursor-pointer hover:!border-terracotta-500/60 aria-[pressed=true]:!bg-umber-300 aria-[pressed=true]:!text-parchment-100 aria-[pressed=true]:!border-umber-300" aria-pressed="false">
+        {p.data.shortTitle ?? p.data.title}
+      </button>
+    ))}
+  </div>
+
+  <div class="container-wide pb-24">
+    <div data-episode-list>
+      {episodes.map((e) => (
+        <div data-pillar={e.data.pillar.slug} data-secondary-pillar={e.data.secondaryPillar?.slug ?? ''}>
+          <EpisodeCard episode={e} variant="row" />
+        </div>
+      ))}
+    </div>
+  </div>
+
+  <script is:inline>
+    (function () {
+      const bar = document.querySelector('[data-filter-bar]');
+      const list = document.querySelector('[data-episode-list]');
+      if (!bar || !list) return;
+      bar.addEventListener('click', (ev) => {
+        const target = ev.target;
+        if (!(target instanceof HTMLElement) || !target.dataset.filter) return;
+        const filter = target.dataset.filter;
+        bar.querySelectorAll('[data-filter]').forEach((b) => b.setAttribute('aria-pressed', String(b === target)));
+        list.querySelectorAll('[data-pillar]').forEach((row) => {
+          const p = row.getAttribute('data-pillar');
+          const s = row.getAttribute('data-secondary-pillar');
+          row.style.display = filter === 'all' || p === filter || s === filter ? '' : 'none';
+        });
+      });
+    })();
+  </script>
+</BaseLayout>

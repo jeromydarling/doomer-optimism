@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "Bash(npm install:*)",
+      "Bash(npm ci)",
+      "Bash(npm ci:*)",
+      "Bash(npm run build)",
+      "Bash(npm run build:*)",
+      "Bash(npm run dev)",
+      "Bash(npm run dev:*)",
+      "Bash(npm run preview)",
+      "Bash(npm run preview:*)",
+      "Bash(npm run check)",
+      "Bash(npm run check:*)",
+      "Bash(npx astro:*)",
+      "Bash(node --version)",
+      "Bash(npm --version)",
+      "Bash(git status)",
+      "Bash(git status:*)",
+      "Bash(git diff)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(git show:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)",
+      "Bash(git push:*)",
+      "Bash(ls)",
+      "Bash(ls:*)",
+      "Bash(cat ./*)",
+      "Bash(find . -name *)",
+      "Bash(find . -type *)",
+      "Bash(grep:*)"
+    ],
+    "deny": []
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -f package.json ] && [ ! -d node_modules ]; then echo 'Installing site dependencies for this session...'; npm install --no-audit --no-fund --loglevel=error >/dev/null 2>&1 && echo 'Dependencies installed.' || echo 'npm install failed; run it manually.'; fi"
+          }
+        ]
+      }
+    ]
+  }
+}

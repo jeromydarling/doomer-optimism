@@ -1,0 +1,36 @@
+---
+import { withBase } from '../lib/site';
+import type { CollectionEntry } from 'astro:content';
+
+interface Props {
+  pillar: CollectionEntry<'pillars'>;
+  episodeCount?: number;
+}
+const { pillar, episodeCount } = Astro.props;
+const href = withBase(`/pillars/${pillar.slug}`);
+
+const accentClass = {
+  terracotta: 'before:bg-terracotta-500',
+  moss: 'before:bg-moss-500',
+  umber: 'before:bg-umber-200',
+  oxblood: 'before:bg-oxblood-500',
+}[pillar.data.accent];
+---
+
+<a
+  href={href}
+  class={`!border-b-0 group block relative pl-5 py-5 pr-4 hover:bg-parchment-50 transition-colors before:content-[''] before:absolute before:left-0 before:top-5 before:bottom-5 before:w-[2px] ${accentClass}`}
+>
+  <div class="flex items-baseline justify-between gap-3 mb-1.5">
+    <h3 class="!text-2xl !text-umber-300 group-hover:!text-terracotta-500 transition-colors leading-tight">
+      {pillar.data.title}
+    </h3>
+    {episodeCount != null && (
+      <span class="smallcaps !text-umber-100 shrink-0">{episodeCount} ep</span>
+    )}
+  </div>
+  <p class="text-umber-100 text-[0.95rem] leading-relaxed">{pillar.data.blurb}</p>
+  {pillar.data.leadVoice && (
+    <p class="smallcaps mt-3">Lead voice · <span class="lowercase tracking-normal italic font-serif">{pillar.data.leadVoice}</span></p>
+  )}
+</a>

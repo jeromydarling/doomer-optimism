@@ -1,0 +1,92 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Hero from '../components/Hero.astro';
+import EpisodeCard from '../components/EpisodeCard.astro';
+import PillarCard from '../components/PillarCard.astro';
+import ContributorCard from '../components/ContributorCard.astro';
+import { withBase, site } from '../lib/site';
+
+const allEpisodes = (await getCollection('episodes', (e) => !e.data.draft))
+  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+const featured = allEpisodes.find((e) => e.data.featured) ?? allEpisodes[0];
+const recent = allEpisodes.filter((e) => e.id !== featured.id).slice(0, 6);
+
+const pillars = (await getCollection('pillars')).sort((a, b) => a.data.order - b.data.order);
+const pillarCounts = Object.fromEntries(
+  pillars.map((p) => [
+    p.slug,
+    allEpisodes.filter(
+      (e) => e.data.pillar.slug === p.slug || e.data.secondaryPillar?.slug === p.slug,
+    ).length,
+  ]),
+);
+
+const contributors = (await getCollection('contributors', (c) => c.data.featured));
+---
+
+<BaseLayout>
+  <Hero />
+
+  {featured && (
+    <section class="container-wide pt-12 md:pt-16">
+      <div class="rule-ornament mb-8">
+        <span class="smallcaps">Latest · Episode {featured.data.number}</span>
+      </div>
+      <EpisodeCard episode={featured} variant="feature" />
+    </section>
+  )}
+
+  <section class="container-wide pt-20">
+    <div class="flex items-baseline justify-between gap-4 mb-2">
+      <h2 class="!text-3xl md:!text-4xl">Six arenas for living well</h2>
+      <a href={withBase('/pillars')} class="smallcaps !border-b-0 hover:!text-terracotta-500 hidden sm:inline">All pillars →</a>
+    </div>
+    <p class="text-umber-100 max-w-prose mb-10">
+      The conversation organizes around six interlocking domains. Each pillar has its own
+      lead voices, its own practitioners, and its own slow-built reading list.
+    </p>
+    <div class="grid md:grid-cols-2 gap-x-10 gap-y-2 border-t border-b border-umber-300/15 divide-y md:divide-y-0 divide-umber-300/15">
+      {pillars.map((p) => (
+        <PillarCard pillar={p} episodeCount={pillarCounts[p.slug]} />
+      ))}
+    </div>
+  </section>
+
+  <section class="container-wide pt-20">
+    <div class="flex items-baseline justify-between gap-4 mb-8">
+      <h2 class="!text-3xl md:!text-4xl">Recent episodes</h2>
+      <a href={withBase('/episodes')} class="smallcaps !border-b-0 hover:!text-terracotta-500 hidden sm:inline">All episodes →</a>
+    </div>
+    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-12">
+      {recent.map((e) => <EpisodeCard episode={e} />)}
+    </div>
+    <div class="mt-10 text-center sm:hidden">
+      <a href={withBase('/episodes')} class="btn">All episodes</a>
+    </div>
+  </section>
+
+  <section class="container-wide pt-24">
+    <h2 class="!text-3xl md:!text-4xl mb-2">Voices of the show</h2>
+    <p class="text-umber-100 max-w-prose mb-10">
+      Hosts, lead voices, and recurring contributors. Each portrait is a hand-engraved
+      hedcut in the tradition of the Wall Street Journal — generated as placeholders
+      until the commissioned set is delivered.
+    </p>
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-8">
+      {contributors.map((c) => <ContributorCard contributor={c} />)}
+    </div>
+  </section>
+
+  <section class="container-wide pt-24 pb-8">
+    <div class="bg-parchment-200/50 border border-umber-300/15 p-8 md:p-12 text-center">
+      <p class="smallcaps mb-3">The Newsletter</p>
+      <h2 class="!text-3xl md:!text-4xl mb-3">Companion essays, every other Wednesday.</h2>
+      <p class="text-umber-100 mx-auto mb-7 max-w-xl">
+        Each episode lands with a 1,500–2,500 word companion essay, a categorized
+        bibliography, and a full transcript — delivered to your inbox via Substack.
+      </p>
+      <a href={site.social.substack} class="btn btn-primary">Subscribe on Substack</a>
+    </div>
+  </section>
+</BaseLayout>

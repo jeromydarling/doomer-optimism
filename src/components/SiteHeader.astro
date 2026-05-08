@@ -1,0 +1,93 @@
+---
+import { withBase } from '../lib/site';
+import Ornament from './Ornament.astro';
+
+const links = [
+  { href: '/episodes', label: 'Episodes' },
+  { href: '/pillars', label: 'Pillars' },
+  { href: '/library', label: 'Library' },
+  { href: '/contributors', label: 'Contributors' },
+  { href: '/events', label: 'Events' },
+  { href: '/about', label: 'About' },
+];
+
+const path = Astro.url.pathname.replace(/\/$/, '');
+const isActive = (href: string) => {
+  const target = withBase(href).replace(/\/$/, '');
+  return path === target || path.startsWith(target + '/');
+};
+---
+
+<header class="border-b border-umber-300/15 bg-parchment-100/70 backdrop-blur-sm sticky top-0 z-40">
+  <div class="container-wide flex items-center justify-between gap-4 py-4 md:py-5">
+    <a href={withBase('/')} class="flex items-center gap-3 !border-b-0 group">
+      <Ornament size={28} />
+      <span class="font-display text-2xl md:text-3xl font-medium tracking-tight text-umber-300 group-hover:text-terracotta-500 transition-colors">
+        Doomer Optimism
+      </span>
+    </a>
+
+    <nav aria-label="Primary" class="hidden lg:block">
+      <ul class="flex items-center gap-7">
+        {links.map((l) => (
+          <li>
+            <a
+              href={withBase(l.href)}
+              class={`!border-b-0 smallcaps !text-[0.78rem] hover:!text-terracotta-500 transition-colors ${
+                isActive(l.href) ? '!text-terracotta-500' : '!text-umber-200'
+              }`}
+            >
+              {l.label}
+            </a>
+          </li>
+        ))}
+        <li>
+          <a href={withBase('/newsletter')} class="btn !py-2 !px-3 !text-[0.7rem] !border-b !border-umber-300">
+            Subscribe
+          </a>
+        </li>
+      </ul>
+    </nav>
+
+    <button
+      type="button"
+      aria-label="Open menu"
+      aria-controls="mobile-nav"
+      aria-expanded="false"
+      class="lg:hidden inline-flex flex-col gap-1.5 p-2 -m-2"
+      data-menu-toggle
+    >
+      <span class="block h-px w-6 bg-umber-300"></span>
+      <span class="block h-px w-6 bg-umber-300"></span>
+      <span class="block h-px w-6 bg-umber-300"></span>
+    </button>
+  </div>
+
+  <nav id="mobile-nav" aria-label="Mobile" class="lg:hidden hidden border-t border-umber-300/15 bg-parchment-50">
+    <ul class="container-wide py-4 flex flex-col gap-2">
+      {links.map((l) => (
+        <li>
+          <a href={withBase(l.href)} class="!border-b-0 block py-2 font-display text-2xl text-umber-300 hover:text-terracotta-500">
+            {l.label}
+          </a>
+        </li>
+      ))}
+      <li class="pt-3">
+        <a href={withBase('/newsletter')} class="btn btn-primary block text-center">Subscribe</a>
+      </li>
+    </ul>
+  </nav>
+</header>
+
+<script is:inline>
+  (function () {
+    const btn = document.querySelector('[data-menu-toggle]');
+    const nav = document.getElementById('mobile-nav');
+    if (!btn || !nav) return;
+    btn.addEventListener('click', () => {
+      const expanded = btn.getAttribute('aria-expanded') === 'true';
+      btn.setAttribute('aria-expanded', String(!expanded));
+      nav.classList.toggle('hidden');
+    });
+  })();
+</script>

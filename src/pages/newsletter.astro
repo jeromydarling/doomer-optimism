@@ -1,0 +1,20 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { site } from '../lib/site';
+---
+
+<BaseLayout title="Newsletter" description="Subscribe to the Doomer Optimism newsletter on Substack. Companion essays, full transcripts, and categorized bibliographies — every other Wednesday.">
+  <div class="container-prose pt-16 md:pt-24 pb-24 text-center">
+    <p class="smallcaps mb-4">The Newsletter</p>
+    <h1 class="mb-6">Companion essays, every other Wednesday.</h1>
+    <p class="font-serif text-xl text-umber-100 max-w-prose mx-auto mb-10 leading-relaxed">
+      Each episode lands with a 1,500–2,500 word companion essay, a full transcript,
+      and a categorized bibliography. We publish on Substack so you can read in your inbox,
+      keep an archive, and pay it forward when the time is right.
+    </p>
+    <a href={site.social.substack} class="btn btn-primary">Subscribe on Substack</a>
+    <p class="smallcaps mt-12">
+      Already a listener? <a href={site.social.youtube}>YouTube</a> · <a href={site.social.spotify}>Spotify</a> · <a href={site.social.apple}>Apple</a>
+    </p>
+  </div>
+</BaseLayout>

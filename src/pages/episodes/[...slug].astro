@@ -1,0 +1,162 @@
+---
+import { getCollection, getEntry } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { formatDate, formatDuration, withBase, site } from '../../lib/site';
+import HedcutPlaceholder from '../../components/HedcutPlaceholder.astro';
+
+export async function getStaticPaths() {
+  const episodes = await getCollection('episodes', (e) => !e.data.draft);
+  return episodes.map((e) => ({ params: { slug: e.slug }, props: { entry: e } }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await entry.render();
+const data = entry.data;
+const pillar = await getEntry(data.pillar);
+const secondary = data.secondaryPillar ? await getEntry(data.secondaryPillar) : null;
+const guest = data.guestSlug ? await getEntry(data.guestSlug) : null;
+
+const articles = await getCollection('articles', (a) => a.data.episode?.slug === entry.slug);
+
+const allEpisodes = (await getCollection('episodes', (e) => !e.data.draft))
+  .sort((a, b) => b.data.number - a.data.number);
+const idx = allEpisodes.findIndex((e) => e.id === entry.id);
+const prev = allEpisodes[idx + 1];
+const next = allEpisodes[idx - 1];
+---
+
+<BaseLayout title={`Ep ${data.number} — ${data.title}`} description={data.summary} ogType="article">
+  <article data-pagefind-body>
+    <div class="container-wide pt-10 md:pt-16 pb-6">
+      <p class="smallcaps mb-3">
+        <a href={withBase('/episodes')} class="!border-b-0 hover:!text-terracotta-500">All episodes</a>
+        <span class="mx-2 text-umber-100/50">·</span>
+        Episode {data.number} · {formatDate(data.pubDate)} · {formatDuration(data.durationSeconds)}
+      </p>
+      <h1 data-pagefind-meta="title" class="mb-4 max-w-4xl">{data.title}</h1>
+      <p class="font-serif text-xl text-umber-100 max-w-3xl">with <em>{data.guest}</em></p>
+      <div class="mt-5 flex flex-wrap gap-2" data-pagefind-filter={`pillar:${pillar.data.title}`}>
+        <a href={withBase(`/pillars/${pillar.slug}`)} class="pillar-pill !border-b-0 hover:!border-terracotta-500/60">{pillar.data.title}</a>
+        {secondary && <a href={withBase(`/pillars/${secondary.slug}`)} class="pillar-pill !border-b-0 hover:!border-terracotta-500/60">{secondary.data.title}</a>}
+      </div>
+    </div>
+
+    <div class="container-wide grid md:grid-cols-[1fr_320px] gap-12 pt-6 pb-20">
+      <div class="min-w-0">
+        <div class="aspect-video bg-parchment-200/70 border border-umber-300/20 mb-10 flex items-center justify-center relative overflow-hidden">
+          <div class="absolute inset-0 bg-gradient-to-br from-terracotta-500/10 via-transparent to-moss-500/10"></div>
+          <div class="text-center px-8 relative">
+            <p class="smallcaps mb-2">Doomer Optimism · {String(data.number).padStart(3, '0')}</p>
+            <p class="font-display text-3xl md:text-5xl text-umber-300 max-w-2xl">{data.title}</p>
+            <p class="smallcaps mt-3">with {data.guest}</p>
+          </div>
+        </div>
+
+        <div class="prose-content max-w-none">
+          <p class="drop-cap text-lg leading-relaxed text-umber-200 mb-8" data-pagefind-meta="summary">
+            {data.summary}
+          </p>
+          <Content />
+        </div>
+
+        {data.bibliography.length > 0 && (
+          <section class="mt-16 pt-10 border-t border-umber-300/15">
+            <p class="smallcaps mb-3">Categorized Bibliography</p>
+            <h2 class="!text-2xl mb-5">Sources & further reading</h2>
+            <ul class="grid md:grid-cols-2 gap-x-8 gap-y-3">
+              {data.bibliography.map((b) => (
+                <li class="text-umber-200 text-[0.95rem] leading-relaxed">
+                  {b.href ? <a href={b.href} class="!border-b-0 hover:!text-terracotta-500 italic">{b.title}</a> : <span class="italic">{b.title}</span>}
+                  {b.author && <span> — {b.author}</span>}
+                  {b.year && <span class="text-umber-100">, {b.year}</span>}
+                  <span class="ml-2 smallcaps !text-[0.6rem]">{b.kind}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {articles.length > 0 && (
+          <section class="mt-16 pt-10 border-t border-umber-300/15">
+            <p class="smallcaps mb-3">Companion Article</p>
+            {articles.map((a) => (
+              <a href={withBase(`/library/${a.slug}`)} class="!border-b-0 block group">
+                <h3 class="!text-2xl group-hover:!text-terracotta-500 mb-1 leading-tight">{a.data.title}</h3>
+                {a.data.subtitle && <p class="italic text-umber-100">{a.data.subtitle}</p>}
+                <p class="smallcaps mt-2">{a.data.author} · {a.data.readingMinutes} min read</p>
+              </a>
+            ))}
+          </section>
+        )}
+
+        <section class="mt-16 pt-10 border-t border-umber-300/15">
+          <p class="smallcaps mb-3">Transcript</p>
+          {data.transcript ? (
+            <div class="text-umber-200 leading-relaxed whitespace-pre-line">{data.transcript}</div>
+          ) : (
+            <p class="text-umber-100 italic">
+              Transcript coming soon — auto-generated and human-reviewed as part of the
+              new production rhythm. The full archive of 300+ episode transcripts is being
+              backfilled into the <a href={withBase('/library')}>research library</a>.
+            </p>
+          )}
+        </section>
+      </div>
+
+      <aside class="space-y-8">
+        <div class="border border-umber-300/15 p-5 bg-parchment-50/60">
+          <p class="smallcaps mb-3">Listen & Watch</p>
+          <ul class="space-y-2">
+            {data.youtubeId && <li><a href={`https://www.youtube.com/watch?v=${data.youtubeId}`}>YouTube</a></li>}
+            <li><a href={site.social.spotify}>Spotify / Anchor</a></li>
+            <li><a href={site.social.apple}>Apple Podcasts</a></li>
+            {data.substackUrl && <li><a href={data.substackUrl}>Read on Substack</a></li>}
+          </ul>
+        </div>
+
+        {guest && (
+          <div class="border border-umber-300/15 p-5 bg-parchment-50/60">
+            <p class="smallcaps mb-3">The Guest</p>
+            <a href={withBase(`/contributors/${guest.slug}`)} class="!border-b-0 group flex gap-3 items-start">
+              <div class="w-16 shrink-0 overflow-hidden">
+                {guest.data.portrait ? (
+                  <img src={withBase(guest.data.portrait)} alt={`Portrait of ${guest.data.name}`} width="64" height="64" loading="lazy" class="w-full h-auto" />
+                ) : (
+                  <HedcutPlaceholder name={guest.data.name} size={64} />
+                )}
+              </div>
+              <div>
+                <p class="font-display text-xl !text-umber-300 group-hover:!text-terracotta-500 leading-tight">{guest.data.name}</p>
+                {guest.data.role && <p class="smallcaps !text-[0.65rem]">{guest.data.role}</p>}
+                {guest.data.affiliation && <p class="italic text-umber-100 text-[0.85rem] mt-1">{guest.data.affiliation}</p>}
+              </div>
+            </a>
+          </div>
+        )}
+
+        <div class="border border-umber-300/15 p-5 bg-parchment-50/60">
+          <p class="smallcaps mb-3">Brought to you by</p>
+          <a href={site.sponsor.href} class="!border-b-0 block">
+            <p class="font-display text-2xl !text-umber-300 hover:!text-terracotta-500">{site.sponsor.name}</p>
+            <p class="italic text-umber-100">{site.sponsor.tagline}</p>
+          </a>
+        </div>
+      </aside>
+    </div>
+
+    <nav class="container-wide pb-20 grid sm:grid-cols-2 gap-6 border-t border-umber-300/15 pt-8">
+      {prev ? (
+        <a href={withBase(`/episodes/${prev.slug}`)} class="!border-b-0 group">
+          <p class="smallcaps mb-1">← Earlier · No. {prev.data.number}</p>
+          <p class="font-display text-xl !text-umber-300 group-hover:!text-terracotta-500">{prev.data.title}</p>
+        </a>
+      ) : <span></span>}
+      {next ? (
+        <a href={withBase(`/episodes/${next.slug}`)} class="!border-b-0 group sm:text-right">
+          <p class="smallcaps mb-1">Later · No. {next.data.number} →</p>
+          <p class="font-display text-xl !text-umber-300 group-hover:!text-terracotta-500">{next.data.title}</p>
+        </a>
+      ) : <span></span>}
+    </nav>
+  </article>
+</BaseLayout>

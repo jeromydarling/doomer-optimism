@@ -1,0 +1,45 @@
+---
+import { site, withBase } from '../lib/site';
+import Ornament from './Ornament.astro';
+---
+
+<section class="relative overflow-hidden border-b border-umber-300/15">
+  <div class="container-wide pt-16 md:pt-28 pb-20 md:pb-32 relative">
+    <div class="max-w-3xl">
+      <p class="smallcaps mb-6 flex items-center gap-3">
+        <Ornament size={20} />
+        Episode 300 + a movement
+      </p>
+      <h1 class="!text-[clamp(2.75rem,8vw,6rem)] !leading-[1.02] mb-8 text-umber-300">
+        How do we live well<br />
+        <span class="italic font-serif text-terracotta-500">in the age of the Machine?</span>
+      </h1>
+      <p class="font-serif text-xl md:text-2xl leading-relaxed text-umber-100 max-w-2xl">
+        A pluralistic conversation with farmers, builders, repairers, scholars, and parents
+        building human-scale alternatives — clear-eyed about systemic fragility,
+        rooted in the practical work of bread and roses.
+      </p>
+      <div class="mt-10 flex flex-wrap gap-3">
+        <a href={withBase('/episodes')} class="btn btn-primary">Listen to episodes</a>
+        <a href={withBase('/about')} class="btn">What is Doomer Optimism?</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- decorative horizon ornament -->
+  <svg
+    aria-hidden="true"
+    class="absolute -right-16 top-12 hidden md:block opacity-[0.08]"
+    width="520"
+    height="520"
+    viewBox="0 0 520 520"
+    fill="none"
+  >
+    <circle cx="260" cy="260" r="200" stroke="currentColor" stroke-width="1" />
+    <circle cx="260" cy="260" r="160" stroke="currentColor" stroke-width="1" />
+    <circle cx="260" cy="260" r="120" stroke="currentColor" stroke-width="1" />
+    <circle cx="260" cy="260" r="80" stroke="currentColor" stroke-width="1" />
+    <line x1="60" y1="260" x2="460" y2="260" stroke="currentColor" stroke-width="1" />
+    <line x1="260" y1="60" x2="260" y2="460" stroke="currentColor" stroke-width="1" />
+  </svg>
+</section>

@@ -1,0 +1,183 @@
+@import '@fontsource/eb-garamond/400.css';
+@import '@fontsource/eb-garamond/500.css';
+@import '@fontsource/eb-garamond/600.css';
+@import '@fontsource/eb-garamond/400-italic.css';
+@import '@fontsource/cormorant-garamond/400.css';
+@import '@fontsource/cormorant-garamond/500.css';
+@import '@fontsource/cormorant-garamond/600.css';
+@import '@fontsource/cormorant-garamond/700.css';
+@import '@fontsource/cormorant-garamond/400-italic.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light only;
+    --paper: #F4ECDB;
+    --paper-deep: #EADFC4;
+    --ink: #2A2117;
+    --ink-soft: #5A4D3B;
+    --rule: rgba(42, 33, 23, 0.18);
+    --terracotta: #A6582C;
+    --moss: #5C6E47;
+    --oxblood: #7A2B27;
+  }
+
+  html {
+    background:
+      radial-gradient(circle at 20% 0%, rgba(166, 88, 44, 0.06), transparent 55%),
+      radial-gradient(circle at 80% 100%, rgba(92, 110, 71, 0.06), transparent 60%),
+      var(--paper);
+    color: var(--ink);
+    font-family: theme('fontFamily.serif');
+    font-size: 18px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body { min-height: 100vh; }
+
+  ::selection {
+    background: rgba(166, 88, 44, 0.25);
+    color: var(--ink);
+  }
+
+  h1, h2, h3, h4 {
+    font-family: theme('fontFamily.display');
+    font-weight: 500;
+    color: var(--ink);
+    letter-spacing: -0.005em;
+    line-height: 1.12;
+  }
+
+  h1 { font-size: clamp(2.5rem, 6vw, 4.75rem); font-weight: 500; }
+  h2 { font-size: clamp(1.85rem, 3.6vw, 2.65rem); }
+  h3 { font-size: clamp(1.4rem, 2.4vw, 1.85rem); }
+  h4 { font-size: 1.25rem; }
+
+  p { max-width: 68ch; }
+
+  a {
+    color: var(--terracotta);
+    text-decoration: none;
+    text-underline-offset: 3px;
+    border-bottom: 1px solid rgba(166, 88, 44, 0.35);
+    transition: color 0.2s, border-color 0.2s;
+  }
+  a:hover { color: var(--oxblood); border-bottom-color: var(--oxblood); }
+
+  hr {
+    border: 0;
+    height: 1px;
+    background: var(--rule);
+    margin: 3rem 0;
+  }
+
+  blockquote {
+    border-left: 2px solid var(--terracotta);
+    padding-left: 1.25rem;
+    font-style: italic;
+    color: var(--ink-soft);
+  }
+
+  figure { margin: 2rem 0; }
+  figcaption {
+    font-family: theme('fontFamily.sans');
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--ink-soft);
+    margin-top: 0.5rem;
+  }
+}
+
+@layer components {
+  .smallcaps {
+    font-family: theme('fontFamily.sans');
+    font-size: 0.72rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--ink-soft);
+  }
+
+  .rule-ornament {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    color: var(--ink-soft);
+  }
+  .rule-ornament::before, .rule-ornament::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--rule);
+  }
+
+  .drop-cap::first-letter {
+    font-family: theme('fontFamily.display');
+    font-weight: 600;
+    color: var(--terracotta);
+    float: left;
+    font-size: 4.6rem;
+    line-height: 0.85;
+    padding: 0.35rem 0.6rem 0 0;
+  }
+
+  .container-wide { max-width: 1180px; margin: 0 auto; padding: 0 1.25rem; }
+  @media (min-width: 768px) { .container-wide { padding: 0 2rem; } }
+
+  .container-prose { max-width: 68ch; margin: 0 auto; padding: 0 1.25rem; }
+
+  .pillar-pill {
+    font-family: theme('fontFamily.sans');
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    padding: 0.25rem 0.6rem;
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    color: var(--ink-soft);
+    background: rgba(255,255,255,0.35);
+    display: inline-block;
+  }
+
+  .btn {
+    display: inline-block;
+    font-family: theme('fontFamily.sans');
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    padding: 0.85rem 1.25rem;
+    border: 1px solid var(--ink);
+    color: var(--ink);
+    background: transparent;
+    transition: background 0.2s, color 0.2s;
+  }
+  .btn:hover { background: var(--ink); color: var(--paper); border-bottom-color: var(--ink); }
+
+  .btn-primary {
+    background: var(--ink);
+    color: var(--paper);
+  }
+  .btn-primary:hover { background: var(--terracotta); border-color: var(--terracotta); }
+
+  /* Pagefind UI overrides to fit aesthetic */
+  :root {
+    --pagefind-ui-scale: 0.85;
+    --pagefind-ui-primary: var(--terracotta);
+    --pagefind-ui-text: var(--ink);
+    --pagefind-ui-background: transparent;
+    --pagefind-ui-border: var(--rule);
+    --pagefind-ui-tag: rgba(255,255,255,0.4);
+    --pagefind-ui-border-radius: 2px;
+    --pagefind-ui-image-border-radius: 2px;
+    --pagefind-ui-image-box-ratio: 3 / 2;
+    --pagefind-ui-font: theme('fontFamily.serif');
+  }
+}
