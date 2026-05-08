@@ -118,8 +118,12 @@ const next = allEpisodes[idx - 1];
           <div class="border border-umber-300/15 p-5 bg-parchment-50/60">
             <p class="smallcaps mb-3">The Guest</p>
             <a href={withBase(`/contributors/${guest.slug}`)} class="!border-b-0 group flex gap-3 items-start">
-              <div class="w-16 shrink-0">
-                <HedcutPlaceholder name={guest.data.name} size={64} />
+              <div class="w-16 shrink-0 overflow-hidden">
+                {guest.data.portrait ? (
+                  <img src={withBase(guest.data.portrait)} alt={`Portrait of ${guest.data.name}`} width="64" height="64" loading="lazy" class="w-full h-auto" />
+                ) : (
+                  <HedcutPlaceholder name={guest.data.name} size={64} />
+                )}
               </div>
               <div>
                 <p class="font-display text-xl !text-umber-300 group-hover:!text-terracotta-500 leading-tight">{guest.data.name}</p>

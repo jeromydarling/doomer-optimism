@@ -10,12 +10,24 @@ interface Props {
 const { contributor, variant = 'card' } = Astro.props;
 const c = contributor.data;
 const href = withBase(`/contributors/${contributor.slug}`);
+const portraitSrc = c.portrait ? withBase(c.portrait) : null;
 ---
 
 {variant === 'card' && (
   <a href={href} class="!border-b-0 group block text-center">
-    <div class="bg-parchment-200/40 border border-umber-300/20 group-hover:border-terracotta-500/50 transition-colors p-6 mb-4 aspect-square flex items-center justify-center">
-      <HedcutPlaceholder name={c.name} size={140} />
+    <div class="bg-parchment-200/40 border border-umber-300/20 group-hover:border-terracotta-500/50 transition-colors p-6 mb-4 aspect-square flex items-center justify-center overflow-hidden">
+      {portraitSrc ? (
+        <img
+          src={portraitSrc}
+          alt={`Portrait of ${c.name}`}
+          width="280"
+          height="280"
+          loading="lazy"
+          class="max-w-full max-h-full object-contain"
+        />
+      ) : (
+        <HedcutPlaceholder name={c.name} size={140} />
+      )}
     </div>
     <h3 class="!text-xl !text-umber-300 group-hover:!text-terracotta-500 transition-colors mb-1">{c.name}</h3>
     {c.role && <p class="smallcaps">{c.role}</p>}
@@ -25,8 +37,12 @@ const href = withBase(`/contributors/${contributor.slug}`);
 
 {variant === 'compact' && (
   <a href={href} class="!border-b-0 group flex items-center gap-3 py-2">
-    <div class="w-12 h-12 shrink-0">
-      <HedcutPlaceholder name={c.name} size={48} />
+    <div class="w-12 h-12 shrink-0 overflow-hidden">
+      {portraitSrc ? (
+        <img src={portraitSrc} alt={`Portrait of ${c.name}`} width="48" height="48" loading="lazy" class="w-full h-full object-cover" />
+      ) : (
+        <HedcutPlaceholder name={c.name} size={48} />
+      )}
     </div>
     <div>
       <p class="font-display text-lg !text-umber-300 group-hover:!text-terracotta-500 leading-tight">{c.name}</p>

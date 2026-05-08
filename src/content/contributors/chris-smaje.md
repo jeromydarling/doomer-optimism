@@ -2,7 +2,9 @@
 name: Chris Smaje
 role: Recurring Voice & Companion Writer
 affiliation: Small Farm Future
-featured: false
+featured: true
+portrait: /portraits/chris-smaje.png
+portraitCredit: Hedcut by Adobe Firefly, from a photograph supplied by the producer
 pillars:
   - regenerative-agriculture
 links:

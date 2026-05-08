@@ -24,7 +24,20 @@ const allEpisodes = (await getCollection('episodes', (e) => !e.data.draft))
 <BaseLayout title={entry.data.name} description={entry.data.bio}>
   <div class="container-wide pt-12 md:pt-20 pb-12 grid md:grid-cols-[260px_1fr] gap-10 items-start">
     <div class="bg-parchment-200/50 border border-umber-300/15 p-6 max-w-xs">
-      <HedcutPlaceholder name={entry.data.name} size={220} />
+      {entry.data.portrait ? (
+        <img
+          src={withBase(entry.data.portrait)}
+          alt={`Portrait of ${entry.data.name}`}
+          width="220"
+          height="220"
+          class="w-full h-auto"
+        />
+      ) : (
+        <HedcutPlaceholder name={entry.data.name} size={220} />
+      )}
+      {entry.data.portraitCredit && (
+        <p class="smallcaps !text-[0.6rem] mt-3 text-center">{entry.data.portraitCredit}</p>
+      )}
     </div>
     <div>
       <p class="smallcaps mb-3">

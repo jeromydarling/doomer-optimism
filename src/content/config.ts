@@ -20,6 +20,8 @@ const contributors = defineCollection({
     affiliation: z.string().optional(),
     bio: z.string(),
     pillars: z.array(reference('pillars')).default([]),
+    portrait: z.string().optional(),
+    portraitCredit: z.string().optional(),
     links: z
       .object({
         website: z.string().url().optional(),
