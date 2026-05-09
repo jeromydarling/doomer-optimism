@@ -9,6 +9,8 @@
 @import '@fontsource/cormorant-garamond/400-italic.css';
 @import '@fontsource/inter/400.css';
 @import '@fontsource/inter/500.css';
+@import '@fontsource/special-elite/400.css';
+@import '@fontsource/italianno/400.css';
 
 @tailwind base;
 @tailwind components;
@@ -133,6 +135,38 @@
   @media (min-width: 768px) { .container-wide { padding: 0 2rem; } }
 
   .container-prose { max-width: 68ch; margin: 0 auto; padding: 0 1.25rem; }
+
+  /* ---- Wordmark ----------------------------------------------------------
+     "Doomer Optimism" rendered as the show's editorial juxtaposition: the
+     industrial-machine word in a beat-up typewriter face, the hand-written
+     human reply in flowing calligraphic script. Heights are tuned so the
+     two pieces sit on a shared baseline despite very different x-heights. */
+  .wordmark {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.32em;
+    line-height: 1;
+    color: var(--ink);
+  }
+  .wordmark-doomer {
+    font-family: 'Special Elite', 'Courier Prime', monospace;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    color: #312820;
+    text-transform: none;
+  }
+  .wordmark-optimism {
+    font-family: 'Italianno', 'Apple Chancery', cursive;
+    font-weight: 400;
+    color: var(--terracotta);
+    /* Italianno has a low x-height — bump size so it visually balances the
+       chunkier typewriter set "Doomer" beside it. */
+    font-size: 1.7em;
+    line-height: 0.85;
+    letter-spacing: 0.005em;
+    margin-left: -0.04em;
+    transform: translateY(0.06em);
+  }
 
   .pillar-pill {
     font-family: theme('fontFamily.sans');
