@@ -104,7 +104,14 @@ async function processEpisode(it) {
   const number = it.episodeNumber ?? extractEpisodeNumber(it.title);
   const slug = makeSlug(it.title);
   const baseName = number != null ? `${number}-${slug}` : `unnumbered-${shortHash(it.guid)}-${slug}`;
-  const outMdxPath = join(EPISODES_DIR, `${baseName}.mdx`);
+
+  // If a hand-curated file already exists for this episode number/slug, we
+  // write back to *it* so curated frontmatter is preserved and we don't
+  // duplicate the episode under a fresh RSS-derived filename.
+  const existingPath = existing.byNumber.get(number) ?? existing.bySlug.get(slug) ?? null;
+  const outMdxPath = (existingPath && existsSync(existingPath))
+    ? existingPath
+    : join(EPISODES_DIR, `${baseName}.mdx`);
 
   log('');
   log(`▶ ${baseName}  ${it.title}`);
@@ -164,7 +171,7 @@ async function processEpisode(it) {
     utterances,
     speakers,
     enriched,
-    existingPath: existing.byNumber.get(number) ?? existing.bySlug.get(slug) ?? null,
+    existingPath: (existingPath && existsSync(existingPath)) ? existingPath : null,
   });
   await writeFile(outMdxPath, mdx);
   log(`  ✓ wrote ${outMdxPath}`);
@@ -254,18 +261,26 @@ function wordsToUtterances(words) {
   let cur = null;
   for (const w of words) {
     if (w.type && w.type !== 'word' && w.type !== 'audio_event') continue;
-    const speaker = w.speaker_id ?? 'A';
+    // Normalise the raw speaker_id (e.g. "speaker_0") immediately so the
+    // grouping comparison below is apples-to-apples. Without this every word
+    // started a new utterance because cur.speaker held the normalised form
+    // ("A") and `speaker` held the raw form ("speaker_0") — never equal.
+    const speaker = normalizeSpeakerLabel(w.speaker_id ?? 'A');
     const text = w.text ?? '';
     if (!cur || cur.speaker !== speaker) {
       if (cur) utt.push(cur);
-      cur = { speaker: normalizeSpeakerLabel(speaker), text, start: (w.start ?? 0) * 1000, end: (w.end ?? 0) * 1000 };
+      cur = { speaker, text, start: (w.start ?? 0) * 1000, end: (w.end ?? 0) * 1000 };
     } else {
-      cur.text += (cur.text.endsWith(' ') ? '' : ' ') + text;
+      // No leading space if next token is attached punctuation/closer.
+      const sep = (cur.text === '' || /^[.,!?:;'’”)\]}]/.test(text)) ? '' : ' ';
+      cur.text += sep + text;
       cur.end = (w.end ?? cur.end) * 1000;
     }
   }
   if (cur) utt.push(cur);
-  return utt.filter((u) => u.text.trim().length > 1);
+  return utt
+    .map((u) => ({ ...u, text: u.text.trim() }))
+    .filter((u) => u.text.length > 1);
 }
 
 function normalizeSpeakerLabel(id) {
@@ -407,10 +422,27 @@ function extractEpisodeNumber(title) {
 }
 
 function extractGuestName(title) {
-  const cleaned = title.replace(/^(?:DO|Episode|Ep\.?)\s*\d+\s*[—\-:|]\s*/i, '');
-  const beforeWith = cleaned.split(/\s+(?:w\/|with)\s+/i)[0];
-  const beforeOn = beforeWith.split(/\s+on\s+/i)[0];
-  return beforeOn.trim().slice(0, 80) || null;
+  // Pull the segment that comes before the first connective ("with", "w/",
+  // "on", "and", "featuring") or comma — that's where a guest name lives in
+  // titles like "DO 296 - Peter Allen on regenerative ag" or "DO 96 - Inez
+  // Stepman w/ Ashley Colby". For solo / topic-titled episodes there is no
+  // such segment, so we return null and fall back to "Speaker B" for the
+  // second voice (rather than wrongly labelling them with the topic title,
+  // which is what the previous version did).
+  const cleaned = title.replace(/^(?:DO|Episode|Ep\.?)\s*\d+\s*[—\-:|]\s*/i, '').trim();
+  if (!cleaned) return null;
+  const candidate = cleaned
+    .split(/\s+(?:w\/|with|on|and|featuring|feat\.?)\s+|,\s+/i)[0]
+    ?.trim();
+  if (!candidate) return null;
+  const words = candidate.split(/\s+/);
+  // A proper name is 2–4 words, each beginning with an uppercase letter.
+  // Allows "Dr.", "O'Neill", "Berman-Smith".
+  if (words.length < 2 || words.length > 4) return null;
+  if (candidate.length > 50) return null;
+  const looksLikeName = words.every((w) => /^[A-Z][a-zA-Z'’‘\-\.]*$/.test(w));
+  if (!looksLikeName) return null;
+  return candidate;
 }
 
 function makeSlug(title) {
