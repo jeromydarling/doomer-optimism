@@ -35,7 +35,17 @@ const next = allEpisodes[idx - 1];
         Episode {data.number} · {formatDate(data.pubDate)} · {formatDuration(data.durationSeconds)}
       </p>
       <h1 data-pagefind-meta="title" class="mb-4 max-w-4xl">{data.title}</h1>
-      <p class="font-serif text-xl text-umber-100 max-w-3xl">with <em>{data.guest}</em></p>
+      {data.guest && (
+        <p class="font-serif text-xl text-umber-100 max-w-3xl">with <em>{data.guest}</em></p>
+      )}
+      {/*
+        Hidden Pagefind meta — captured for the search index but not
+        visible in the page itself. (Pagefind reads the element's
+        `data-pagefind-meta` attribute and indexes its text content.)
+      */}
+      {data.guest && <span data-pagefind-meta="guest" style="display:none">{data.guest}</span>}
+      <span data-pagefind-meta="number" style="display:none">{String(data.number)}</span>
+      <span data-pagefind-meta="pillar" style="display:none">{pillar.data.title}</span>
       <div class="mt-5 flex flex-wrap gap-2" data-pagefind-filter={`pillar:${pillar.data.title}`}>
         <a href={withBase(`/pillars/${pillar.slug}`)} class="pillar-pill !border-b-0 hover:!border-terracotta-500/60">{pillar.data.title}</a>
         {secondary && <a href={withBase(`/pillars/${secondary.slug}`)} class="pillar-pill !border-b-0 hover:!border-terracotta-500/60">{secondary.data.title}</a>}
