@@ -1,0 +1,480 @@
+---
+import { getCollection, getEntry } from 'astro:content';
+import { site, formatDate } from '../../lib/site';
+import Ornament from '../../components/Ornament.astro';
+
+export async function getStaticPaths() {
+  const articles = await getCollection('articles', (a) => !a.data.draft);
+  const years = [...new Set(articles.map((a) => a.data.pubDate.getFullYear()))].sort();
+  // Always include the current calendar year so the route exists even with no articles yet.
+  const currentYear = new Date().getFullYear();
+  if (!years.includes(currentYear)) years.push(currentYear);
+  return years.map((y) => ({ params: { year: String(y) } }));
+}
+
+const { year } = Astro.params;
+const Y = Number(year);
+
+const articles = (await getCollection('articles', (a) => !a.data.draft && a.data.pubDate.getFullYear() === Y))
+  .sort((a, b) => a.data.pubDate.valueOf() - b.data.pubDate.valueOf());
+
+const episodes = (await getCollection('episodes', (e) => !e.data.draft && e.data.pubDate.getFullYear() === Y))
+  .sort((a, b) => a.data.pubDate.valueOf() - b.data.pubDate.valueOf());
+
+// Aggregate bibliography across the year, dedupe by title|author
+const seen = new Set<string>();
+const yearBibliography = episodes
+  .flatMap((e) =>
+    e.data.bibliography.map((b) => ({ ...b, episodeNumber: e.data.number, episodeTitle: e.data.title })),
+  )
+  .filter((b) => {
+    const k = `${b.title}|${b.author ?? ''}`.toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  })
+  .sort((a, b) => a.title.localeCompare(b.title));
+
+const bibByKind = {
+  book: yearBibliography.filter((b) => b.kind === 'book'),
+  paper: yearBibliography.filter((b) => b.kind === 'paper'),
+  article: yearBibliography.filter((b) => b.kind === 'article'),
+  film: yearBibliography.filter((b) => b.kind === 'film'),
+  podcast: yearBibliography.filter((b) => b.kind === 'podcast'),
+  site: yearBibliography.filter((b) => b.kind === 'site'),
+};
+
+// Resolve pillars referenced by articles for the chapter-divider pages
+const pillarRefs = [...new Set(articles.map((a) => a.data.pillar.id))];
+const pillars = await Promise.all(pillarRefs.map((slug) => getEntry('pillars', slug)));
+
+const renderedArticles = await Promise.all(
+  articles.map(async (a) => {
+    const { Content } = await a.render();
+    return { entry: a, Content };
+  }),
+);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Doomer Optimism Annual {Y}</title>
+    <meta name="robots" content="noindex" />
+    <style is:global>
+      @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@400;500&display=swap');
+
+      :root {
+        --paper: #F4ECDB;
+        --ink: #2A2117;
+        --ink-soft: #5A4D3B;
+        --rule: rgba(42, 33, 23, 0.18);
+        --terracotta: #A6582C;
+      }
+
+      /* ---- Page setup (Lulu-friendly 6x9 trim) -------------------------- */
+      @page {
+        size: 6in 9in;
+        margin: 0.875in 0.75in 1in 0.75in;
+        background: var(--paper);
+      }
+      @page :left {
+        @top-left { content: string(book-title); font-family: 'Inter', sans-serif; font-size: 8pt; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); }
+        @top-right { content: ''; }
+        @bottom-left { content: counter(page); font-family: 'EB Garamond', serif; font-size: 9pt; color: var(--ink-soft); }
+        @bottom-right { content: ''; }
+      }
+      @page :right {
+        @top-left { content: ''; }
+        @top-right { content: string(chapter-title); font-family: 'Inter', sans-serif; font-size: 8pt; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); }
+        @bottom-left { content: ''; }
+        @bottom-right { content: counter(page); font-family: 'EB Garamond', serif; font-size: 9pt; color: var(--ink-soft); }
+      }
+      @page front-matter :left {
+        @top-left { content: ''; }
+        @bottom-left { content: ''; }
+      }
+      @page front-matter :right {
+        @top-right { content: ''; }
+        @bottom-right { content: ''; }
+      }
+      @page :first {
+        margin: 0;
+        @top-left { content: ''; }
+        @top-right { content: ''; }
+        @bottom-left { content: ''; }
+        @bottom-right { content: ''; }
+      }
+
+      html { string-set: book-title "Doomer Optimism Annual" Y; }
+      body {
+        background: var(--paper);
+        color: var(--ink);
+        font-family: 'EB Garamond', Georgia, serif;
+        font-size: 11.5pt;
+        line-height: 1.45;
+        margin: 0;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+
+      h1, h2, h3, h4 {
+        font-family: 'Cormorant Garamond', Garamond, serif;
+        font-weight: 500;
+        color: var(--ink);
+      }
+
+      .smallcaps {
+        font-family: 'Inter', sans-serif;
+        font-size: 0.72rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        color: var(--ink-soft);
+      }
+
+      a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--rule); }
+
+      hr { border: 0; height: 1px; background: var(--rule); margin: 2rem auto; width: 30%; }
+
+      blockquote {
+        border-left: 1.5px solid var(--terracotta);
+        margin: 1.5rem 0 1.5rem 1rem;
+        padding-left: 1rem;
+        font-style: italic;
+        color: var(--ink-soft);
+      }
+
+      /* ---- Section structure -------------------------------------------- */
+      .frontispiece {
+        page: front-matter;
+        page-break-after: right;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        align-items: center;
+        text-align: center;
+        padding: 2in 1in 1.5in;
+        box-sizing: border-box;
+      }
+      .frontispiece h1 {
+        font-size: 60pt;
+        line-height: 1;
+        letter-spacing: -0.005em;
+        margin: 0.5em 0 0;
+      }
+      .frontispiece .year { font-size: 44pt; font-style: italic; color: var(--terracotta); margin-top: 0.4em; font-family: 'Cormorant Garamond', serif; font-weight: 400; }
+      .frontispiece .subtitle { font-size: 14pt; font-style: italic; color: var(--ink-soft); margin-top: 1.2em; max-width: 24em; }
+      .frontispiece .imprint { font-family: 'Inter', sans-serif; font-size: 8pt; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); }
+
+      .colophon-page {
+        page: front-matter;
+        page-break-before: right;
+        height: 100vh;
+        padding: 2in 1in;
+        box-sizing: border-box;
+      }
+      .colophon-page p { margin: 0 0 0.5em; font-size: 10pt; color: var(--ink-soft); max-width: 24em; }
+
+      .toc {
+        page-break-before: right;
+        page: front-matter;
+        padding: 0.25in 0;
+      }
+      .toc h2 {
+        font-size: 32pt;
+        font-style: italic;
+        font-weight: 400;
+        margin: 0 0 1.2em;
+      }
+      .toc ol { list-style: none; padding: 0; margin: 0; counter-reset: chapter; }
+      .toc li {
+        display: flex;
+        align-items: baseline;
+        gap: 0.4em;
+        font-size: 12pt;
+        line-height: 1.6;
+        page-break-inside: avoid;
+      }
+      .toc li > .leader {
+        flex: 1;
+        border-bottom: 1px dotted var(--ink-soft);
+        margin: 0 0.3em 0.3em;
+        min-width: 1em;
+      }
+      .toc li .label { font-style: italic; color: var(--ink-soft); }
+
+      .chapter-divider {
+        page-break-before: right;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        gap: 1em;
+      }
+      .chapter-divider .smallcaps { letter-spacing: 0.32em; }
+      .chapter-divider h2 {
+        font-size: 44pt;
+        font-style: italic;
+        font-weight: 400;
+        max-width: 12em;
+        line-height: 1.05;
+        color: var(--terracotta);
+      }
+
+      .chapter {
+        page-break-before: right;
+        string-set: chapter-title content();
+      }
+      .chapter > h2 {
+        font-size: 32pt;
+        line-height: 1.05;
+        margin: 1.5em 0 0.4em;
+        max-width: 18em;
+      }
+      .chapter > .subtitle { font-style: italic; font-size: 14pt; color: var(--ink-soft); margin-bottom: 1.5em; max-width: 30em; }
+      .chapter > .byline { font-family: 'Inter', sans-serif; font-size: 8pt; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 2.5em; }
+
+      .body p { text-indent: 1.2em; margin: 0 0 0.4em; orphans: 2; widows: 2; }
+      .body p:first-of-type { text-indent: 0; }
+      .body p:first-of-type::first-letter {
+        font-family: 'Cormorant Garamond', serif;
+        font-weight: 600;
+        color: var(--terracotta);
+        float: left;
+        font-size: 4.4em;
+        line-height: 0.85;
+        padding: 0.32em 0.18em 0 0;
+      }
+      .body h2 { font-size: 18pt; margin-top: 1.5em; }
+      .body h3 { font-size: 14pt; margin-top: 1.2em; }
+      .body ul, .body ol { padding-left: 1.5em; }
+
+      .episode-chapter {
+        page-break-before: always;
+        margin-top: 2em;
+      }
+      .episode-chapter h3 {
+        font-size: 18pt;
+        margin: 0 0 0.2em;
+        max-width: 22em;
+      }
+      .episode-chapter .meta { font-family: 'Inter', sans-serif; font-size: 8pt; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 1em; }
+      .episode-chapter .summary { font-size: 11pt; line-height: 1.5; max-width: 32em; margin-bottom: 0.8em; }
+      .episode-chapter .pull { font-style: italic; color: var(--terracotta); border-left: 1.5px solid var(--terracotta); padding-left: 0.8em; max-width: 28em; margin: 0.4em 0; }
+      .episode-chapter .biblio { font-size: 9.5pt; color: var(--ink-soft); margin-top: 0.6em; }
+      .episode-chapter .biblio b { color: var(--ink); font-style: italic; font-weight: 500; }
+
+      .biblio-section { page-break-before: right; }
+      .biblio-section h2 { font-size: 32pt; font-style: italic; font-weight: 400; margin: 0 0 0.6em; }
+      .biblio-section h3 { font-size: 13pt; margin: 1.4em 0 0.4em; padding-bottom: 0.2em; border-bottom: 1px solid var(--rule); }
+      .biblio-list { list-style: none; padding: 0; margin: 0; }
+      .biblio-list li { font-size: 10.5pt; line-height: 1.45; margin-bottom: 0.3em; page-break-inside: avoid; }
+      .biblio-list li i { font-style: italic; }
+
+      /* ---- On-screen affordances (kept readable in browser) ------------- */
+      @media screen {
+        body {
+          background: linear-gradient(to bottom, #d6cdb6, #d6cdb6 1in, #F4ECDB 1in, #F4ECDB);
+          padding: 1in 0;
+        }
+        .page-mock {
+          width: 6in;
+          min-height: 9in;
+          padding: 0.875in 0.75in 1in 0.75in;
+          margin: 0 auto 0.5in;
+          background: var(--paper);
+          box-shadow: 0 6px 28px rgba(42, 33, 23, 0.15);
+          box-sizing: border-box;
+          page-break-after: always;
+        }
+        .screen-toolbar {
+          position: sticky;
+          top: 0;
+          background: rgba(214, 205, 182, 0.92);
+          backdrop-filter: blur(6px);
+          padding: 0.6em 1em;
+          text-align: center;
+          font-family: 'Inter', sans-serif;
+          font-size: 0.78rem;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
+          color: var(--ink-soft);
+          z-index: 10;
+          margin: -1in 0 1in;
+        }
+        .screen-toolbar a { color: var(--ink); margin-left: 0.6em; }
+      }
+      @media print {
+        .page-mock { width: auto; min-height: 0; padding: 0; margin: 0; background: transparent; box-shadow: none; }
+        .screen-toolbar { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="screen-toolbar">
+      Print preview · Open Chrome's Print dialog (⌘P / Ctrl+P) → Save as PDF → 6 × 9 in → upload to Lulu
+      <a href={`/annual/${Y}`}>Permalink</a>
+    </div>
+
+    <div class="page-mock">
+      <section class="frontispiece">
+        <div class="imprint">Rizoma Field School · {site.title}</div>
+        <div>
+          <Ornament size={48} />
+          <h1>The Doomer<br/>Optimism<br/>Annual</h1>
+          <div class="year">{Y}</div>
+          <p class="subtitle">{site.tagline} A year in essays, conversations, and citations from {site.title}.</p>
+        </div>
+        <div class="imprint">Edited by {site.host}</div>
+      </section>
+    </div>
+
+    <div class="page-mock">
+      <section class="colophon-page">
+        <p><b>The Doomer Optimism Annual {Y}</b></p>
+        <p>Companion essays, episode summaries, and the year's bibliography drawn from {site.title}, the podcast hosted by {site.host}.</p>
+        <p>Published by Rizoma Field School. Set in EB Garamond and Cormorant Garamond. Printed on demand.</p>
+        <p>This volume gathers material from {episodes.length} episodes broadcast between {episodes.length ? formatDate(episodes[0].data.pubDate) : '—'} and {episodes.length ? formatDate(episodes[episodes.length - 1].data.pubDate) : '—'}, together with {articles.length} long-form companion essays.</p>
+        <p>© {Y} the contributors and Doomer Optimism. All rights reserved.</p>
+      </section>
+    </div>
+
+    <div class="page-mock">
+      <section class="toc">
+        <p class="smallcaps">Contents</p>
+        <h2>What's in here</h2>
+        <ol>
+          {articles.length > 0 && (
+            <li><span class="label">i.</span> <span>Companion Essays</span><span class="leader"></span><span></span></li>
+          )}
+          {articles.map((a) => (
+            <li style="padding-left: 1.4em;">
+              <span style="font-style: italic;">{a.data.title}</span>
+              <span class="leader"></span>
+              <span class="label">{a.data.author}</span>
+            </li>
+          ))}
+          {episodes.length > 0 && (
+            <li style="margin-top: 0.6em;"><span class="label">ii.</span> <span>The Year in Conversations</span><span class="leader"></span><span></span></li>
+          )}
+          {pillars.length > 0 && (
+            <li style="margin-top: 0.6em;"><span class="label">iii.</span> <span>Bibliography &amp; Reading List</span><span class="leader"></span><span></span></li>
+          )}
+        </ol>
+      </section>
+    </div>
+
+    {articles.length > 0 && (
+      <div class="page-mock">
+        <section class="chapter-divider">
+          <p class="smallcaps">Part One</p>
+          <h2>Companion Essays</h2>
+          <Ornament size={32} />
+        </section>
+      </div>
+    )}
+
+    {renderedArticles.map(({ entry, Content }) => (
+      <div class="page-mock">
+        <section class="chapter">
+          <h2>{entry.data.title}</h2>
+          {entry.data.subtitle && <p class="subtitle">{entry.data.subtitle}</p>}
+          <p class="byline">{entry.data.author} · {formatDate(entry.data.pubDate)}</p>
+          <div class="body">
+            <Content />
+          </div>
+        </section>
+      </div>
+    ))}
+
+    {episodes.length > 0 && (
+      <div class="page-mock">
+        <section class="chapter-divider">
+          <p class="smallcaps">Part Two</p>
+          <h2>The Year in Conversations</h2>
+          <Ornament size={32} />
+        </section>
+      </div>
+    )}
+
+    {episodes.length > 0 && (
+      <div class="page-mock">
+        <section class="chapter">
+          <h2>Episode Summaries · {Y}</h2>
+          <p class="byline">{episodes.length} conversations</p>
+          {episodes.map((e) => (
+            <div class="episode-chapter">
+              <h3>No. {e.data.number} — {e.data.title}</h3>
+              <p class="meta">with {e.data.guest} · {formatDate(e.data.pubDate)}</p>
+              <p class="summary">{e.data.summary}</p>
+              {e.data.bibliography.length > 0 && (
+                <div class="biblio">
+                  <p class="smallcaps" style="margin-bottom: 0.3em;">Sources cited</p>
+                  {e.data.bibliography.slice(0, 6).map((b) => (
+                    <span><b>{b.title}</b>{b.author ? ` — ${b.author}` : ''}{b.year ? `, ${b.year}` : ''}{'.  '}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </section>
+      </div>
+    )}
+
+    {yearBibliography.length > 0 && (
+      <div class="page-mock">
+        <section class="chapter-divider">
+          <p class="smallcaps">Part Three</p>
+          <h2>The Year's Reading List</h2>
+          <Ornament size={32} />
+        </section>
+      </div>
+    )}
+
+    {yearBibliography.length > 0 && (
+      <div class="page-mock">
+        <section class="biblio-section">
+          <p class="smallcaps">Bibliography</p>
+          <h2>Sources cited across {Y}</h2>
+          <p style="margin-bottom: 1em; color: var(--ink-soft);">Every book, paper, film, and resource referenced across the year's conversations — categorized for the patient reader.</p>
+
+          {(['book', 'paper', 'article', 'film', 'podcast', 'site'] as const).map((kind) => {
+            const items = bibByKind[kind];
+            if (!items?.length) return null;
+            const heading = { book: 'Books', paper: 'Papers', article: 'Articles', film: 'Films', podcast: 'Podcasts', site: 'Sites & projects' }[kind];
+            return (
+              <>
+                <h3>{heading} <span class="smallcaps" style="margin-left: 0.5em;">({items.length})</span></h3>
+                <ul class="biblio-list">
+                  {items.map((b) => (
+                    <li>
+                      <i>{b.title}</i>
+                      {b.author && <> — {b.author}</>}
+                      {b.year && <span style="color: var(--ink-soft);">, {b.year}</span>}
+                      <span class="smallcaps" style="margin-left: 0.5em;">Ep {b.episodeNumber}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            );
+          })}
+        </section>
+      </div>
+    )}
+
+    <div class="page-mock">
+      <section class="colophon-page" style="text-align: center; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 1em;">
+        <Ornament size={32} />
+        <p class="smallcaps">Colophon</p>
+        <p style="font-style: italic; max-width: 24em;">Set in EB Garamond and Cormorant Garamond. Printed on demand by Lulu Press, Inc. Bound to last; meant to be read slowly.</p>
+        <p style="margin-top: 2em;">{site.title} · doomeroptimism.com</p>
+      </section>
+    </div>
+  </body>
+</html>
