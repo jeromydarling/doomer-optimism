@@ -7,7 +7,7 @@ import PillarCard from '../components/PillarCard.astro';
 import ContributorCard from '../components/ContributorCard.astro';
 import YouTubeEmbed from '../components/YouTubeEmbed.astro';
 import TrailerModal from '../components/TrailerModal.astro';
-import { withBase, site } from '../lib/site';
+import { withBase, site, excerpt } from '../lib/site';
 
 const allEpisodesIncludingDrafts = (await getCollection('episodes'))
   .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
@@ -82,6 +82,35 @@ const contributors = (await getCollection('contributors', (c) => c.data.featured
             videoId={latestWithVideo.data.youtubeId!}
             title={latestWithVideo.data.title}
           />
+
+          {/*
+            Auto-generated teaser from the Haiku-written summary in the
+            episode's frontmatter. Truncated to ~260 chars at a sentence
+            boundary. When a new episode lands via the auto-watcher, its
+            summary populates here automatically — no homepage edits.
+          */}
+          {latestWithVideo.data.summary && (
+            <div class="mt-4">
+              <h3 class="font-display text-2xl md:text-[1.75rem] text-umber-300 leading-snug mb-2">
+                <a
+                  href={withBase(`/episodes/${latestWithVideo.slug}`)}
+                  class="!border-b-0 hover:!text-terracotta-500"
+                >
+                  {latestWithVideo.data.title}
+                </a>
+              </h3>
+              <p class="font-serif text-base md:text-[1.05rem] leading-relaxed text-umber-100">
+                {excerpt(latestWithVideo.data.summary, 280)}
+                {' '}
+                <a
+                  href={withBase(`/episodes/${latestWithVideo.slug}`)}
+                  class="smallcaps !text-[0.62rem] !border-b-0 hover:!text-terracotta-500 align-middle"
+                >
+                  Read more →
+                </a>
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>
