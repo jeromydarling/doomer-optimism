@@ -46,7 +46,7 @@ jobs:
           cache: 'npm'
 
       - name: Install npm deps
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Restore transcript cache
         uses: actions/cache@v4
