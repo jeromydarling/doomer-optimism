@@ -1,8 +1,10 @@
 name: Render promo video
 
-# Builds the 60-second podcast promo MP4 in CI — no local FFmpeg, no
-# manual asset fetch, no Puppeteer download on the user's machine.
-# Runs on demand or whenever the composition changes.
+# Builds the 60-second podcast promo MP4 in CI.
+# - On every run (success OR failure), writes status + last log lines to
+#   `_status/render-promo.json` on the `_status` branch so Claude can
+#   read what happened via the existing GitHub MCP without needing the
+#   `actions:read` toolset enabled. See "Report status" step at bottom.
 
 on:
   workflow_dispatch:
@@ -21,7 +23,7 @@ on:
       - '.github/workflows/render-promo.yml'
 
 permissions:
-  contents: write   # needed to upload artifacts + (optional) create release
+  contents: write   # needed for artifacts, releases, and the _status branch
 
 concurrency:
   group: render-promo
@@ -44,68 +46,151 @@ jobs:
           node-version: 22
 
       - name: Install FFmpeg
+        id: ffmpeg
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg
-          ffmpeg -version | head -1
+          mkdir -p /tmp/promo-logs
+          {
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq ffmpeg
+            ffmpeg -version | head -1
+          } 2>&1 | tee /tmp/promo-logs/ffmpeg.log
 
-      # Pre-warm hyperframes CLI + its Puppeteer Chromium bundle. We pin
-      # the same version package.json uses so the 'npm run *' scripts pick
-      # this up and don't re-download the world.
-      - name: Install hyperframes (one-shot, primes Puppeteer)
+      - name: Install hyperframes (primes Puppeteer)
+        id: install_hf
         run: |
-          npm install --no-audit --no-fund hyperframes@0.5.5 puppeteer@22
+          npm install --no-audit --no-fund hyperframes@0.5.5 puppeteer@22 2>&1 | tee /tmp/promo-logs/install_hf.log
 
-      - name: Fetch public-domain assets (Angelus + Bach)
-        run: ./fetch-assets.sh
+      - name: Fetch assets
+        id: fetch
+        run: ./fetch-assets.sh 2>&1 | tee /tmp/promo-logs/fetch.log
 
-      - name: Lint + validate composition
+      - name: Lint + validate
+        id: lint
         run: |
-          npx --yes hyperframes@0.5.5 lint
-          npx --yes hyperframes@0.5.5 validate
-          npx --yes hyperframes@0.5.5 inspect
+          {
+            npx --yes hyperframes@0.5.5 lint
+            npx --yes hyperframes@0.5.5 validate
+            npx --yes hyperframes@0.5.5 inspect
+          } 2>&1 | tee /tmp/promo-logs/lint.log
 
       - name: Render MP4
+        id: render
         run: |
-          npx --yes hyperframes@0.5.5 render
-          ls -lh *.mp4 || ls -lh dist/*.mp4 || true
+          {
+            npx --yes hyperframes@0.5.5 render
+            ls -lh *.mp4 || ls -lh dist/*.mp4 || true
+          } 2>&1 | tee /tmp/promo-logs/render.log
 
-      # The output filename varies depending on hyperframes' default. Find
-      # whatever .mp4 was produced and rename to a stable label.
-      - name: Stage rendered file
+      - name: Stage MP4
+        id: stage
         run: |
-          set -e
-          mkdir -p out
-          shopt -s globstar nullglob
-          mp4s=( **/*.mp4 )
-          if [ ${#mp4s[@]} -eq 0 ]; then
-            echo "No .mp4 produced — render likely failed." >&2
-            exit 1
-          fi
-          cp "${mp4s[0]}" "out/${{ github.event.inputs.title || 'promo' }}.mp4"
-          ls -lh out/
+          {
+            set -e
+            mkdir -p out
+            shopt -s globstar nullglob
+            mp4s=( **/*.mp4 )
+            if [ ${#mp4s[@]} -eq 0 ]; then
+              echo "No .mp4 produced — render likely failed." >&2
+              exit 1
+            fi
+            cp "${mp4s[0]}" "out/${{ github.event.inputs.title || 'promo' }}.mp4"
+            ls -lh out/
+          } 2>&1 | tee /tmp/promo-logs/stage.log
 
-      - name: Upload as workflow artifact
+      - name: Upload artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: promo-${{ github.run_number }}
           path: promo/out/*.mp4
           retention-days: 90
 
-      # Bonus: also publish a copy to a tagged release so the URL is
-      # stable and shareable. Skipped for non-main pushes; on
-      # workflow_dispatch we always publish so Ashley has something to
-      # point to.
-      - name: Upload to a rolling release tag (latest-promo)
-        if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+      - name: Publish rolling release
+        id: release
+        if: success() && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            set -e
+            TAG="latest-promo"
+            gh release delete "$TAG" -y --cleanup-tag 2>/dev/null || true
+            gh release create "$TAG" \
+              --title "Latest promo render (run #${{ github.run_number }})" \
+              --notes "Auto-built by render-promo.yml on $(date -u +%Y-%m-%dT%H:%M:%SZ). Source commit: ${{ github.sha }}." \
+              promo/out/*.mp4
+          } 2>&1 | tee /tmp/promo-logs/release.log
+
+      # Always-run reporter: writes status + last log lines to the
+      # `_status` branch as a JSON file Claude can read via the standard
+      # GitHub Contents API (which the existing MCP exposes via
+      # get_file_contents). Survives failures because if: always().
+      - name: Report status
+        if: always()
+        working-directory: ${{ github.workspace }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
-          TAG="latest-promo"
-          # Recreate the rolling tag so it always points at the freshest commit.
-          gh release delete "$TAG" -y --cleanup-tag 2>/dev/null || true
-          gh release create "$TAG" \
-            --title "Latest promo render (run #${{ github.run_number }})" \
-            --notes "Auto-built by render-promo.yml on $(date -u +%Y-%m-%dT%H:%M:%SZ). Source commit: ${{ github.sha }}." \
-            promo/out/*.mp4
+          STATUS="${{ job.status }}"   # success | failure | cancelled
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          # Concatenate every step's tee'd log, tail the last 250 lines
+          # so big builds don't blow the file size.
+          mkdir -p /tmp/_status
+          if compgen -G "/tmp/promo-logs/*.log" >/dev/null; then
+            ( for f in /tmp/promo-logs/*.log; do
+                echo "===== $(basename "$f" .log) ====="
+                cat "$f"
+                echo
+              done ) | tail -n 250 > /tmp/_status/log-tail.txt
+          else
+            echo "(no step logs captured)" > /tmp/_status/log-tail.txt
+          fi
+
+          # Build the status JSON. Use python to escape log bodies
+          # safely; bash heredoc + jq would also work.
+          python3 - "$STATUS" "$RUN_URL" "${{ github.run_number }}" "${{ github.sha }}" "${{ github.event_name }}" <<'PY'
+          import json, os, sys
+          status, run_url, run_number, sha, event = sys.argv[1:6]
+          with open('/tmp/_status/log-tail.txt', 'r', errors='replace') as f:
+              log_tail = f.read()
+          payload = {
+              'workflow': 'render-promo',
+              'status': status,
+              'run_number': int(run_number),
+              'run_url': run_url,
+              'commit_sha': sha,
+              'event': event,
+              'updated_at': os.popen('date -u +%Y-%m-%dT%H:%M:%SZ').read().strip(),
+              'log_tail': log_tail,
+          }
+          with open('/tmp/_status/render-promo.json', 'w') as f:
+              json.dump(payload, f, indent=2)
+          PY
+
+          # Write to the _status branch via the Contents API. Branch is
+          # orphaned-style: we don't care about its history, just keep
+          # one file per workflow.
+          cd "$RUNNER_TEMP" && rm -rf _status && mkdir _status && cd _status
+          git init -q -b _status
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name  "github-actions[bot]"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+
+          # If the branch already exists, fetch + reset onto it so the
+          # commit history doesn't grow unbounded. Otherwise start fresh.
+          if git ls-remote --exit-code --heads origin _status >/dev/null 2>&1; then
+            git fetch --depth=1 origin _status
+            git reset --hard origin/_status
+          fi
+
+          mkdir -p _status
+          cp /tmp/_status/render-promo.json _status/render-promo.json
+
+          git add _status/render-promo.json
+          git commit -q -m "render-promo run #${{ github.run_number }} → ${STATUS}" || echo "  (no diff)"
+          git push -f origin HEAD:_status
+          echo
+          echo "Status published to _status branch:"
+          echo "  https://github.com/${{ github.repository }}/blob/_status/_status/render-promo.json"
