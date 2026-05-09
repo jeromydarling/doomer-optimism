@@ -115,10 +115,14 @@ jobs:
             set -e
             TAG="latest-promo"
             gh release delete "$TAG" -y --cleanup-tag 2>/dev/null || true
+            # cwd is `promo/` because of `defaults.run.working-directory`,
+            # so the artifact path is just `out/*.mp4`. (upload-artifact
+            # above uses repo-root-relative paths because that action
+            # ignores the step working-directory.)
             gh release create "$TAG" \
               --title "Latest promo render (run #${{ github.run_number }})" \
               --notes "Auto-built by render-promo.yml on $(date -u +%Y-%m-%dT%H:%M:%SZ). Source commit: ${{ github.sha }}." \
-              promo/out/*.mp4
+              out/*.mp4
           } 2>&1 | tee /tmp/promo-logs/release.log
 
       # Always-run reporter: writes status + last log lines to the
