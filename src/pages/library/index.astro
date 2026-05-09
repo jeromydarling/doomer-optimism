@@ -2,6 +2,7 @@
 import { getCollection } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { withBase, formatDate } from '../../lib/site';
+import BibliographyLink from '../../components/BibliographyLink.astro';
 
 const articles = (await getCollection('articles', (a) => !a.data.draft))
   .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
@@ -76,10 +77,16 @@ const byKind = {
           <ul class="grid md:grid-cols-2 gap-x-8 gap-y-2">
             {items.map((b) => (
               <li class="text-umber-200 text-[0.95rem] leading-relaxed">
-                {b.href ? <a href={b.href} class="!border-b-0 hover:!text-terracotta-500 italic">{b.title}</a> : <span class="italic">{b.title}</span>}
-                {b.author && <span> — {b.author}</span>}
-                {b.year && <span class="text-umber-100">, {b.year}</span>}
-                <a class="smallcaps !text-[0.6rem] ml-2 !border-b-0 hover:!text-terracotta-500" href={withBase(`/episodes/${b.episodeSlug}`)}>Ep {b.episodeNumber}</a>
+                <BibliographyLink
+                  title={b.title}
+                  author={b.author}
+                  year={b.year}
+                  href={b.href}
+                  isbn={b.isbn}
+                  kind={b.kind}
+                  showKind={false}
+                  showEpisodeRef={{ number: b.episodeNumber, href: withBase(`/episodes/${b.episodeSlug}`) }}
+                />
               </li>
             ))}
           </ul>

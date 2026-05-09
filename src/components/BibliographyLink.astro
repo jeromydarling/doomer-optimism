@@ -1,0 +1,33 @@
+---
+import { bookshopUrl } from '../lib/site';
+
+interface Props {
+  title: string;
+  author?: string;
+  year?: number;
+  href?: string;
+  isbn?: string;
+  kind: 'book' | 'article' | 'paper' | 'film' | 'podcast' | 'site';
+  showKind?: boolean;
+  showEpisodeRef?: { number?: number; href?: string } | null;
+}
+
+const { title, author, year, href, isbn, kind, showKind = true, showEpisodeRef = null } = Astro.props;
+
+// Bookshop link wins if the entry is a book and we have an ISBN.
+// Otherwise we honor any explicit href set in the entry.
+const bookshop = kind === 'book' ? bookshopUrl(isbn) : null;
+const link = bookshop ?? href ?? null;
+---
+
+{link ? (
+  <a href={link} class="!border-b-0 hover:!text-terracotta-500 italic" rel={bookshop ? 'sponsored noopener' : 'noopener'} target="_blank">{title}</a>
+) : (
+  <span class="italic">{title}</span>
+)}
+{author && <span> — {author}</span>}
+{year && <span class="text-umber-100">, {year}</span>}
+{showKind && <span class="ml-2 smallcaps !text-[0.6rem]">{kind}</span>}
+{showEpisodeRef?.number && showEpisodeRef.href && (
+  <a class="smallcaps !text-[0.6rem] ml-2 !border-b-0 hover:!text-terracotta-500" href={showEpisodeRef.href}>Ep {showEpisodeRef.number}</a>
+)}

@@ -3,6 +3,7 @@ import { getCollection, getEntry } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { formatDate, formatDuration, withBase, site } from '../../lib/site';
 import HedcutPlaceholder from '../../components/HedcutPlaceholder.astro';
+import BibliographyLink from '../../components/BibliographyLink.astro';
 
 export async function getStaticPaths() {
   const episodes = await getCollection('episodes', (e) => !e.data.draft);
@@ -66,10 +67,7 @@ const next = allEpisodes[idx - 1];
             <ul class="grid md:grid-cols-2 gap-x-8 gap-y-3">
               {data.bibliography.map((b) => (
                 <li class="text-umber-200 text-[0.95rem] leading-relaxed">
-                  {b.href ? <a href={b.href} class="!border-b-0 hover:!text-terracotta-500 italic">{b.title}</a> : <span class="italic">{b.title}</span>}
-                  {b.author && <span> — {b.author}</span>}
-                  {b.year && <span class="text-umber-100">, {b.year}</span>}
-                  <span class="ml-2 smallcaps !text-[0.6rem]">{b.kind}</span>
+                  <BibliographyLink {...b} />
                 </li>
               ))}
             </ul>

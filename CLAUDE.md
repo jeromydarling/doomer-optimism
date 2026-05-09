@@ -39,19 +39,31 @@ Static site for the Doomer Optimism podcast (host: Ashley Colby Fitzgerald, co-f
 1. Create `src/content/episodes/{number}-{guest-slug}.mdx` matching the schema in `src/content/config.ts`.
 2. The `pillar` field is a `reference('pillars')` — use the pillar's filename slug (e.g., `regenerative-agriculture`).
 3. If the guest has a contributor page, set `guestSlug` to the contributor's filename slug.
-4. Bibliography is an array of `{ title, author?, year?, href?, kind }`.
+4. Bibliography is an array of `{ title, author?, year?, href?, isbn?, kind }`.
 5. Push to `main` — Actions builds and deploys to Pages.
 
 ## RSS ingestion (future)
 The schema is RSS-ready. When the real Doomer Optimism feed URL is in hand, add a script `scripts/import-rss.mjs` that fetches the feed, transforms each `<item>` into an MDX file under `src/content/episodes/`, and either commits or PRs the result. The file format is intentionally flat to make this trivial.
 
 ## Transcripts pipeline (live)
-- `scripts/transcribe-backfill.mjs` — pulls the YouTube channel via yt-dlp, transcribes via **ElevenLabs Scribe** (with diarization), then enriches each transcript via **Claude Haiku 4.5** (chapters, key topics, bibliography, suggested pillar, summary, pull quotes). Writes MDX preserving curated frontmatter.
+- `scripts/transcribe-backfill.mjs` — pulls the Anchor RSS feed, transcribes via **ElevenLabs Scribe** (with diarization), then enriches each transcript via **Claude Haiku 4.5** (chapters, key topics, bibliography, suggested pillar, summary, pull quotes). Writes MDX preserving curated frontmatter.
 - `.github/workflows/backfill-transcripts.yml` — `workflow_dispatch` action that runs the backfill in CI and opens a PR with the results.
 - Requires `ELEVENLABS_API_KEY` and `ANTHROPIC_API_KEY` repo secrets.
 - Caches per-video JSON in `.transcripts/` and per-video enrichment in `.transcripts/enriched/` so reruns are cheap.
 - Speaker mapping: longest cumulative talker → host (Ashley); second-longest → guest extracted from title; rest are `Speaker C/D/...` for human review.
 - New episodes land with `draft: true` — review-then-publish flow.
+
+## The Annual (Lulu print pipeline)
+- `src/pages/annual/[year].astro` — printable interior. Open in Chrome → Print → Save as PDF (6×9 in) → drop into `public/annual/{year}/interior.pdf`.
+- `src/pages/annual/[year]/cover.astro` — printable front + spine + back cover spread. Default spine width is 0.5" (~150 page book on 60# cream); adjust the `SPINE_INCHES` constant after the final page count is known. Print → custom paper size matching the rendered dimensions → save as `public/annual/{year}/cover.pdf`.
+- After committing both PDFs the static deploy publishes them at public URLs Lulu can fetch.
+- `scripts/lulu-submit.mjs` — OAuth2 + Lulu Print API client. Submits the print job referencing the published PDFs. Requires `LULU_CLIENT_KEY` (and optionally `LULU_CLIENT_SECRET`) env vars; pass `--sandbox` to use Lulu's test environment.
+- The default POD package is 6×9 paperback B&W cream (`0600X0900BWSTDPB060UW444MXX`). Override via `--pod-package-id` for hardcover or premium colour variants.
+
+## Bookshop.org affiliate
+- Set `BOOKSHOP_AFFILIATE_ID` in the build env (or in `.env`) to route every bibliography book link through your Bookshop affiliate ID.
+- Bibliography entries take an optional `isbn` field. When present, books render as Bookshop affiliate links; otherwise they fall back to any explicit `href`, or plain italic text.
+- Component: `src/components/BibliographyLink.astro` — used by the episode detail page, library page, and the Annual.
 
 ## CMS layer (future)
 Static content collections support adding a Git-based admin UI later (Decap CMS / Sveltia CMS) so guest writers can author companion essays without touching the repo. The static deploy stays unchanged — the CMS commits markdown back to this same tree.

@@ -56,6 +56,7 @@ const episodes = defineCollection({
           author: z.string().optional(),
           year: z.number().optional(),
           href: z.string().url().optional(),
+          isbn: z.string().optional(),
           kind: z
             .enum(['book', 'article', 'paper', 'film', 'podcast', 'site'])
             .default('article'),

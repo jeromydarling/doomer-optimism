@@ -52,3 +52,20 @@ export const withBase = (path: string) => {
   if (!path.startsWith('/')) path = '/' + path;
   return base + path;
 };
+
+/**
+ * Build a Bookshop.org link for a book title via its ISBN. When
+ * BOOKSHOP_AFFILIATE_ID is set in the build environment the link routes
+ * through the configured affiliate; otherwise it's a plain Bookshop URL
+ * (still useful to readers, just no commission). Returns null for
+ * missing/invalid ISBNs so callers can fall back to plain italic text.
+ */
+export const bookshopUrl = (isbn?: string | null): string | null => {
+  if (!isbn) return null;
+  const clean = String(isbn).replace(/[^0-9X]/gi, '');
+  if (clean.length !== 10 && clean.length !== 13) return null;
+  const id = String(import.meta.env.BOOKSHOP_AFFILIATE_ID ?? '').trim();
+  return id
+    ? `https://bookshop.org/a/${id}/${clean}`
+    : `https://bookshop.org/p/books/_/${clean}`;
+};
