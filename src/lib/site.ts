@@ -18,6 +18,15 @@ export const site = {
     tagline: 'Catholic Social Teaching, encoded.',
     href: 'https://thecros.app',
   },
+  // Stable URLs for the auto-rendered 60-second promo. Updated on
+  // every render-promo workflow run via a rolling tag, so these
+  // links never break across re-renders.
+  promo: {
+    videoUrl:
+      'https://github.com/jeromydarling/doomer-optimism/releases/download/latest-promo/promo.mp4',
+    posterUrl:
+      'https://github.com/jeromydarling/doomer-optimism/releases/download/latest-promo/poster.jpg',
+  },
 } as const;
 
 export const pillarOrder = [
