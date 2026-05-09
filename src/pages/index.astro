@@ -52,19 +52,23 @@ const contributors = (await getCollection('contributors', (c) => c.data.featured
     </section>
   )}
 
-  <section class="container-wide pt-20">
-    <div class="flex items-baseline justify-between gap-4 mb-2">
-      <h2 class="!text-3xl md:!text-4xl">Six arenas for living well</h2>
-      <a href={withBase('/pillars')} class="smallcaps !border-b-0 hover:!text-terracotta-500 hidden sm:inline">All pillars →</a>
-    </div>
-    <p class="text-umber-100 max-w-prose mb-10">
-      The conversation organizes around six interlocking domains. Each pillar has its own
-      lead voices, its own practitioners, and its own slow-built reading list.
-    </p>
-    <div class="grid md:grid-cols-2 gap-x-10 gap-y-2 border-t border-b border-umber-300/15 divide-y md:divide-y-0 divide-umber-300/15">
-      {pillars.map((p) => (
-        <PillarCard pillar={p} episodeCount={pillarCounts[p.slug]} />
-      ))}
+  <section class="mt-20 bg-umber-300 border-y border-umber-400/40">
+    <div class="container-wide py-16 md:py-20">
+      <div class="flex items-baseline justify-between gap-4 mb-3">
+        <h2 class="!text-3xl md:!text-4xl !text-parchment-100">Six arenas for living well</h2>
+        <a href={withBase('/pillars')} class="smallcaps !text-parchment-400 !border-b-0 hover:!text-terracotta-400 hidden sm:inline">All pillars →</a>
+      </div>
+      <p class="text-parchment-300/80 max-w-prose mb-10">
+        The conversation organizes around six interlocking domains. Each pillar has its own
+        lead voices, its own practitioners, and its own slow-built reading list.
+      </p>
+      <div class="grid md:grid-cols-2 gap-3">
+        {pillars.map((p) => (
+          <div class="bg-parchment-100">
+            <PillarCard pillar={p} episodeCount={pillarCounts[p.slug]} />
+          </div>
+        ))}
+      </div>
     </div>
   </section>
 
@@ -93,15 +97,20 @@ const contributors = (await getCollection('contributors', (c) => c.data.featured
     </div>
   </section>
 
-  <section class="container-wide pt-24 pb-8">
-    <div class="bg-parchment-200/50 border border-umber-300/15 p-8 md:p-12 text-center">
-      <p class="smallcaps mb-3">The Newsletter</p>
-      <h2 class="!text-3xl md:!text-4xl mb-3">Companion essays, every other Wednesday.</h2>
-      <p class="text-umber-100 mx-auto mb-7 max-w-xl">
+  <section class="mt-24 bg-umber-300 border-y border-umber-400/40">
+    <div class="container-wide py-16 md:py-24 text-center">
+      <p class="smallcaps !text-parchment-400 mb-3">The Newsletter</p>
+      <h2 class="!text-3xl md:!text-4xl !text-parchment-100 mb-4 mx-auto max-w-2xl">Companion essays, every other Wednesday.</h2>
+      <p class="text-parchment-300/80 mx-auto mb-8 max-w-xl">
         Each episode lands with a 1,500–2,500 word companion essay, a categorized
         bibliography, and a full transcript — delivered to your inbox via Substack.
       </p>
-      <a href={site.social.substack} class="btn btn-primary">Subscribe on Substack</a>
+      <a
+        href={site.social.substack}
+        class="btn !bg-terracotta-500 !text-parchment-100 !border-terracotta-500 hover:!bg-terracotta-400 hover:!border-terracotta-400 hover:!text-parchment-50"
+      >
+        Subscribe on Substack
+      </a>
     </div>
   </section>
 </BaseLayout>
