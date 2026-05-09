@@ -6,7 +6,7 @@ import EpisodeCard from '../components/EpisodeCard.astro';
 import PillarCard from '../components/PillarCard.astro';
 import ContributorCard from '../components/ContributorCard.astro';
 import YouTubeEmbed from '../components/YouTubeEmbed.astro';
-import TrailerCard from '../components/TrailerCard.astro';
+import TrailerModal from '../components/TrailerModal.astro';
 import { withBase, site } from '../lib/site';
 
 const allEpisodesIncludingDrafts = (await getCollection('episodes'))
@@ -38,28 +38,13 @@ const contributors = (await getCollection('contributors', (c) => c.data.featured
   <Hero />
 
   {/*
-    Trailer card. Click-to-load 60-second promo; the poster is fetched
-    eagerly but the 89MB MP4 only downloads on click. Sits between the
-    static hero and the YouTube + lede band so the homepage opens with:
-    illustration → trailer → latest episode → six pillars → recent.
-  */}
-  <section class="container-wide pt-8 md:pt-10">
-    <div class="rule-ornament mb-5">
-      <span class="smallcaps">The trailer</span>
-    </div>
-    <TrailerCard
-      videoUrl={site.promo.videoUrl}
-      posterUrl={site.promo.posterUrl}
-      caption="60 seconds · 300 episodes · one conversation"
-    />
-  </section>
-
-  {/*
     Two-column band: latest YouTube episode on the left, the show's
     lede + CTAs on the right. Mobile stacks them with the video first.
+    Two-column kicks in at md (768px) so tablets and small laptops see
+    it side-by-side, not just at lg.
   */}
-  <section class="container-wide pt-8 md:pt-12 pb-4">
-    <div class={`grid gap-x-10 gap-y-8 items-center ${latestWithVideo ? 'lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]' : ''}`}>
+  <section class="container-wide pt-8 md:pt-10 pb-4">
+    <div class={`grid gap-x-10 gap-y-8 items-center ${latestWithVideo ? 'md:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]' : ''}`}>
       {latestWithVideo && (
         <div>
           <div class="flex items-baseline justify-between gap-4 mb-3">
@@ -78,7 +63,7 @@ const contributors = (await getCollection('contributors', (c) => c.data.featured
         </div>
       )}
 
-      <div class="lg:border-l lg:border-umber-300/20 lg:pl-10">
+      <div class="md:border-l md:border-umber-300/20 md:pl-10">
         <p class="smallcaps mb-3">Episode 300 + a movement</p>
         <p class="font-serif text-lg md:text-xl leading-relaxed text-umber-100 mb-6">
           A pluralistic conversation with farmers, builders, repairers, scholars, and parents
@@ -87,11 +72,24 @@ const contributors = (await getCollection('contributors', (c) => c.data.featured
         </p>
         <div class="flex flex-wrap gap-3">
           <a href={withBase('/episodes')} class="btn btn-primary">Listen to episodes</a>
-          <a href={withBase('/about')} class="btn">What is Doomer Optimism?</a>
+          <button
+            type="button"
+            class="btn"
+            data-trailer-open
+            aria-haspopup="dialog"
+            aria-controls="trailer-modal"
+          >
+            Watch the trailer
+          </button>
         </div>
       </div>
     </div>
   </section>
+
+  <TrailerModal
+    videoUrl={site.promo.videoUrl}
+    posterUrl={site.promo.posterUrl}
+  />
 
   {featured && (
     <section class="container-wide pt-14 md:pt-20">

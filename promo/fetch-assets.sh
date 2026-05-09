@@ -149,17 +149,52 @@ except Exception:
   # 3. Download.
   local dl="https://archive.org/download/$item/$file"
   echo "    fetching: $dl"
-  if curl -fsSL -A "$UA" -o assets/music.mp3 "$dl"; then
-    local size
-    size=$(stat -c%s assets/music.mp3 2>/dev/null || stat -f%z assets/music.mp3)
-    if [ "${size:-0}" -gt 100000 ]; then
-      echo "    ok ($(file -b assets/music.mp3 | head -c 80); ${size} bytes)"
-      return 0
-    fi
+  if ! curl -fsSL -A "$UA" -o assets/music.mp3 "$dl"; then
+    return 1
+  fi
+  local size
+  size=$(stat -c%s assets/music.mp3 2>/dev/null || stat -f%z assets/music.mp3)
+  if [ "${size:-0}" -lt 100000 ]; then
     echo "    too small (${size} bytes)"
     rm -f assets/music.mp3
+    return 1
   fi
-  return 1
+  echo "    downloaded ($(file -b assets/music.mp3 | head -c 80); ${size} bytes)"
+
+  # 4. Validate via ffprobe — confirm there's an audio stream and the
+  # file is actually playable. Past renders have produced silent MP4s
+  # because we accepted .mp3s that turned out to be empty/corrupt.
+  if ! command -v ffprobe >/dev/null 2>&1; then
+    echo "    (no ffprobe; skipping validation)"
+    return 0
+  fi
+  local probe
+  probe=$(ffprobe -v error -print_format json -show_format -show_streams assets/music.mp3 2>/dev/null || echo '{}')
+  local has_audio duration_s
+  has_audio=$(printf '%s' "$probe" | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    streams = d.get("streams", [])
+    print("yes" if any(s.get("codec_type") == "audio" for s in streams) else "no")
+except Exception:
+    print("no")
+')
+  duration_s=$(printf '%s' "$probe" | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    print(int(float(d.get("format", {}).get("duration") or 0)))
+except Exception:
+    print(0)
+')
+  if [ "$has_audio" != "yes" ] || [ "${duration_s:-0}" -lt 30 ]; then
+    echo "    rejected (audio_stream=$has_audio duration=${duration_s}s)"
+    rm -f assets/music.mp3
+    return 1
+  fi
+  echo "    validated (audio_stream=yes, duration=${duration_s}s)"
+  return 0
 }
 
 echo "▶ Searching archive.org/Musopen for music"

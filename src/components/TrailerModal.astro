@@ -1,0 +1,159 @@
+---
+// Native <dialog> modal for the 60-second promo. Triggered by any
+// element with `data-trailer-open` on the page; closes on Escape, on
+// backdrop click, or on the close button. The video element is created
+// fresh each open so the MP4 only downloads on first interaction (the
+// 89MB asset never loads for visitors who don't click).
+export interface Props {
+  videoUrl: string;
+  posterUrl?: string;
+}
+const { videoUrl, posterUrl } = Astro.props;
+---
+
+<dialog
+  id="trailer-modal"
+  class="trailer-modal"
+  data-video-url={videoUrl}
+  data-poster-url={posterUrl ?? ''}
+  aria-label="Doomer Optimism — 60-second trailer"
+>
+  <div class="trailer-modal-frame">
+    <button class="trailer-modal-close" type="button" aria-label="Close trailer" data-trailer-close>
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+        <path d="M4 4l14 14M18 4L4 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>
+      </svg>
+    </button>
+    <div class="trailer-modal-stage" data-trailer-stage></div>
+  </div>
+</dialog>
+
+<style>
+  .trailer-modal {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--parchment, #f4eddb);
+    max-width: min(96vw, 1280px);
+    width: 100%;
+    max-height: 96vh;
+  }
+  .trailer-modal::backdrop {
+    background: rgba(13, 10, 6, 0.82);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+  .trailer-modal[open] {
+    animation: trailer-fade-in 220ms ease-out;
+  }
+  @keyframes trailer-fade-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .trailer-modal-frame {
+    position: relative;
+    background: #1a140a;
+    border: 1px solid rgba(244, 237, 219, 0.15);
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+  }
+
+  .trailer-modal-stage {
+    position: absolute;
+    inset: 0;
+    display: block;
+  }
+  .trailer-modal-stage video {
+    width: 100%;
+    height: 100%;
+    display: block;
+    background: #0d0a06;
+  }
+
+  .trailer-modal-close {
+    position: absolute;
+    top: 0.65rem;
+    right: 0.65rem;
+    z-index: 2;
+    width: 2.25rem;
+    height: 2.25rem;
+    border: 1px solid rgba(244, 237, 219, 0.35);
+    background: rgba(13, 10, 6, 0.65);
+    color: var(--parchment, #f4eddb);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0;
+    transition: background 160ms ease, border-color 160ms ease;
+  }
+  .trailer-modal-close:hover,
+  .trailer-modal-close:focus-visible {
+    background: rgba(13, 10, 6, 0.85);
+    border-color: rgba(244, 237, 219, 0.7);
+    outline: none;
+  }
+</style>
+
+<script>
+  const modal = document.getElementById('trailer-modal') as HTMLDialogElement | null;
+  if (modal) {
+    const stage = modal.querySelector<HTMLElement>('[data-trailer-stage]');
+    const videoUrl = modal.dataset.videoUrl ?? '';
+    const posterUrl = modal.dataset.posterUrl ?? '';
+
+    const open = () => {
+      if (!stage || !videoUrl) return;
+      // Re-create the video element each time so the MP4 starts fresh
+      // and (when closing) we can fully unload it.
+      stage.innerHTML = '';
+      const v = document.createElement('video');
+      v.src = videoUrl;
+      if (posterUrl) v.poster = posterUrl;
+      v.controls = true;
+      v.autoplay = true;
+      v.playsInline = true;
+      v.preload = 'metadata';
+      stage.appendChild(v);
+      // Native <dialog> handles Escape + focus management for us.
+      if (typeof modal.showModal === 'function') {
+        modal.showModal();
+      } else {
+        modal.setAttribute('open', '');
+      }
+    };
+
+    const close = () => {
+      if (typeof modal.close === 'function') {
+        modal.close();
+      } else {
+        modal.removeAttribute('open');
+      }
+      if (stage) stage.innerHTML = '';
+    };
+
+    document.querySelectorAll('[data-trailer-open]').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        open();
+      });
+    });
+
+    modal.addEventListener('close', () => {
+      if (stage) stage.innerHTML = '';
+    });
+
+    modal.querySelectorAll('[data-trailer-close]').forEach((el) => {
+      el.addEventListener('click', () => close());
+    });
+
+    // Click outside the frame (on the backdrop) closes the modal.
+    modal.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement | null;
+      // The dialog itself is the backdrop area; clicks on children
+      // (the frame) bubble up but their target is inside the frame.
+      if (target === modal) close();
+    });
+  }
+</script>
