@@ -8,10 +8,12 @@ export const site = {
   founded: 2021,
   social: {
     youtube: 'https://www.youtube.com/@doomeroptimism',
+    youtubePlaylistId: 'PLVQyMHekgdkR9-llZSt3O3jIgvZJhLD9m',
     substack: 'https://substack.com/@doomeroptimism',
     twitter: 'https://x.com/DoomerOptimism',
     apple: 'https://podcasts.apple.com/us/podcast/doomer-optimism/id1561218755',
     spotify: 'https://anchor.fm/doomer-optimism',
+    rss: 'https://anchor.fm/s/68308b7c/podcast/rss',
   },
   sponsor: {
     name: 'CROS',
