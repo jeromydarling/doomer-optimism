@@ -102,6 +102,19 @@ jobs:
               -ss 5 -i "${mp4s[0]}" \
               -vframes 1 -q:v 2 \
               "out/poster.jpg"
+
+            # Audio sanity: a previous render shipped silent MP4 because
+            # the picked music.mp3 turned out to be empty. Fail loudly
+            # if the output has no audio stream so the failure mode is
+            # visible in CI rather than only on the homepage.
+            HAS_AUDIO=$(ffprobe -v error -select_streams a -show_entries stream=codec_type \
+              -of default=nw=1:nk=1 "out/${{ github.event.inputs.title || 'promo' }}.mp4")
+            if [ -z "$HAS_AUDIO" ]; then
+              echo "ERROR: rendered MP4 has no audio stream." >&2
+              exit 1
+            fi
+            echo "Audio stream present: $HAS_AUDIO"
+
             ls -lh out/
           } 2>&1 | tee /tmp/promo-logs/stage.log
 
