@@ -36,8 +36,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
-      - name: Checkout
+      - name: Checkout main
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # need history to fetch the PR branch below
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -48,18 +50,27 @@ jobs:
       - name: Install npm deps
         run: npm install --no-audit --no-fund
 
-      - name: Restore transcript cache
-        uses: actions/cache@v4
-        with:
-          # Only cache the JSON outputs. The audio/ subdir is large (~1GB+) and
-          # blows the per-repo cache budget, causing partial restores. Audio is
-          # cheap to re-download from Anchor when needed.
-          path: |
-            .transcripts/*.scribe.json
-            .transcripts/enriched
-          key: transcripts-${{ github.run_id }}
-          restore-keys: |
-            transcripts-
+      # Durable transcript storage. The .transcripts/*.scribe.json and
+      # .transcripts/enriched/ files are committed to the PR branch by
+      # peter-evans (via add-paths). On every re-run we restore those
+      # committed files into the working tree so the script sees them as
+      # cached and skips the expensive Scribe + Haiku calls. This is more
+      # reliable than GitHub Actions cache, which evicts entries when the
+      # per-repo budget is exceeded.
+      - name: Restore .transcripts from PR branch (if present)
+        run: |
+          set -e
+          BRANCH="claude/transcripts-backfill"
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "Branch $BRANCH exists; restoring .transcripts/ from it."
+            git fetch --depth=1 origin "$BRANCH"
+            git checkout "origin/$BRANCH" -- .transcripts/ 2>/dev/null || echo "  (no .transcripts/ on the branch yet)"
+            SCRIBE=$(ls .transcripts/*.scribe.json 2>/dev/null | wc -l | tr -d ' ')
+            ENRICH=$(ls .transcripts/enriched/*.json 2>/dev/null | wc -l | tr -d ' ')
+            echo "  Restored: $SCRIBE scribe.json files, $ENRICH enriched.json files"
+          else
+            echo "Branch $BRANCH does not exist yet — first run, no cache to restore."
+          fi
 
       - name: Run backfill
         env:
@@ -75,15 +86,6 @@ jobs:
           fi
           echo "Running: node scripts/transcribe-backfill.mjs $ARGS"
           eval node scripts/transcribe-backfill.mjs $ARGS
-
-      - name: Save transcript cache
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            .transcripts/*.scribe.json
-            .transcripts/enriched
-          key: transcripts-${{ github.run_id }}
 
       - name: Open pull request
         if: ${{ github.event.inputs.dry_run != 'true' }}
@@ -108,6 +110,10 @@ jobs:
             Existing curated episodes had only their `## Transcript`, `## Chapters`,
             and `## Pull quotes` sections appended; their summaries and
             bibliographies were preserved untouched.
+
+            The .transcripts/ JSON files are committed to this branch so future
+            re-runs of this workflow restore them automatically and don't
+            re-spend on transcription.
           add-paths: |
             src/content/episodes/**
             .transcripts/**
