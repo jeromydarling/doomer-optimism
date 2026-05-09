@@ -122,20 +122,26 @@ async function processEpisode(it) {
     return { guid: it.guid, title: it.title, slug: baseName, dry: true };
   }
 
-  // 1a. Download audio (cached). Anchor enclosure URLs are public.
+  // 1a + 1b. Audio + Scribe transcription. We only need the audio file on
+  // disk if Scribe needs to run; if the .scribe.json is already cached, skip
+  // the download entirely. (The CI cache no longer holds audio files, so a
+  // re-run after a successful transcription doesn't re-download them.)
   const audioExt = inferAudioExt(it.audioUrl);
   const audioPath = join(AUDIO_DIR, `${shortHash(it.guid)}.${audioExt}`);
-  if (!existsSync(audioPath)) {
-    log('  • downloading audio…');
-    await downloadFile(it.audioUrl, audioPath);
-  } else {
-    log('  • audio cached');
+  const txPath = join(CACHE_DIR, `${shortHash(it.guid)}.scribe.json`);
+  const scribeCached = existsSync(txPath);
+
+  if (!scribeCached) {
+    if (!existsSync(audioPath)) {
+      log('  • downloading audio…');
+      await downloadFile(it.audioUrl, audioPath);
+    } else {
+      log('  • audio cached');
+    }
   }
 
-  // 1b. ElevenLabs Scribe (cached)
-  const txPath = join(CACHE_DIR, `${shortHash(it.guid)}.scribe.json`);
   let scribe;
-  if (existsSync(txPath)) {
+  if (scribeCached) {
     scribe = JSON.parse(await readFile(txPath, 'utf8'));
     log('  • scribe transcript cached');
   } else {

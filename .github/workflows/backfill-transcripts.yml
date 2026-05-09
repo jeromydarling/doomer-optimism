@@ -51,8 +51,12 @@ jobs:
       - name: Restore transcript cache
         uses: actions/cache@v4
         with:
+          # Only cache the JSON outputs. The audio/ subdir is large (~1GB+) and
+          # blows the per-repo cache budget, causing partial restores. Audio is
+          # cheap to re-download from Anchor when needed.
           path: |
-            .transcripts
+            .transcripts/*.scribe.json
+            .transcripts/enriched
           key: transcripts-${{ github.run_id }}
           restore-keys: |
             transcripts-
@@ -77,7 +81,8 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: |
-            .transcripts
+            .transcripts/*.scribe.json
+            .transcripts/enriched
           key: transcripts-${{ github.run_id }}
 
       - name: Open pull request
