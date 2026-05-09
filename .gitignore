@@ -38,3 +38,14 @@ public/_demo/*.html
 # Hero image build artifacts (generated from source PNG by build step)
 public/hero/hero-bg.jpg
 public/hero/hero-bg.webp
+
+# Hyperframes promo: binary asset files (fetched by promo/fetch-assets.sh)
+# and rendered MP4s live outside git history.
+promo/assets/*.jpg
+promo/assets/*.png
+promo/assets/*.mp3
+promo/assets/*.wav
+promo/assets/*.mp4
+promo/node_modules/
+promo/*.mp4
+promo/.hyperframes/

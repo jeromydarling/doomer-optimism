@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=EB+Garamond:wght@400;500&family=Inter:wght@400;500&family=Sacramento&family=Special+Elite&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #0d0a06;
+        font-family: 'Cormorant Garamond', Garamond, serif;
+        color: #f4eddb;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .stage { position: relative; width: 100%; height: 100%; }
+
+      /* Background painting + Ken Burns frame */
+      .bg-frame {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        will-change: transform;
+      }
+      .bg-frame img {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 130%;
+        height: auto;
+        transform: translate(-50%, -50%) scale(1);
+        transform-origin: center center;
+        object-fit: cover;
+        filter: brightness(0.9) contrast(1.05) sepia(0.05);
+      }
+
+      /* Vignette + bottom darkening so text holds against the painting */
+      .vignette {
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(ellipse at center, rgba(13,10,6,0) 35%, rgba(13,10,6,0.55) 80%, rgba(13,10,6,0.85) 100%),
+          linear-gradient(180deg, rgba(13,10,6,0.25) 0%, rgba(13,10,6,0) 35%, rgba(13,10,6,0) 65%, rgba(13,10,6,0.55) 100%);
+        pointer-events: none;
+      }
+
+      .smallcaps {
+        font-family: 'Inter', sans-serif;
+        font-size: 22px;
+        font-weight: 500;
+        letter-spacing: 0.32em;
+        text-transform: uppercase;
+        color: #c9a98c;
+      }
+
+      /* Wordmark — same lockup as the site header, blown up */
+      .wordmark {
+        font-size: 180px;
+        line-height: 1;
+        text-align: center;
+      }
+      .wordmark .doomer {
+        font-family: 'Special Elite', monospace;
+        text-transform: uppercase;
+        letter-spacing: -0.06em;
+        color: #f4eddb;
+      }
+      .wordmark .optimism {
+        font-family: 'Sacramento', cursive;
+        color: #d8704a;
+        font-size: 1.32em;
+        margin-left: -0.22em;
+      }
+
+      .center-block {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+        max-width: 1500px;
+        padding: 0 60px;
+      }
+
+      .headline {
+        font-family: 'Cormorant Garamond', Garamond, serif;
+        font-size: 110px;
+        line-height: 1.06;
+        font-weight: 500;
+        text-shadow: 0 2px 12px rgba(0,0,0,0.45);
+      }
+      .headline em {
+        font-style: italic;
+        color: #e89576;
+      }
+
+      .lede {
+        font-family: 'EB Garamond', Garamond, serif;
+        font-size: 56px;
+        line-height: 1.32;
+        max-width: 1500px;
+        margin: 0 auto;
+        text-shadow: 0 2px 10px rgba(0,0,0,0.55);
+      }
+
+      .pillars-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        align-items: center;
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 72px;
+        line-height: 1.15;
+      }
+      .pillar { color: #f4eddb; text-shadow: 0 2px 10px rgba(0,0,0,0.55); }
+
+      .footer-card {
+        position: absolute;
+        bottom: 90px;
+        left: 50%;
+        transform: translate(-50%, 0);
+        text-align: center;
+      }
+      .footer-card .url {
+        font-family: 'Cormorant Garamond', serif;
+        font-style: italic;
+        font-size: 64px;
+        margin-top: 18px;
+      }
+
+      .three-hundred {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 320px;
+        line-height: 0.95;
+        font-weight: 500;
+      }
+      .three-hundred .small {
+        display: block;
+        font-size: 0.14em;
+        letter-spacing: 0.32em;
+        text-transform: uppercase;
+        font-family: 'Inter', sans-serif;
+        margin-top: 24px;
+        color: #c9a98c;
+      }
+
+      .corner-stamp {
+        position: absolute;
+        top: 60px;
+        left: 60px;
+      }
+
+      .blackout {
+        position: absolute;
+        inset: 0;
+        background: #0d0a06;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div
+      id="root"
+      class="stage"
+      data-composition-id="root"
+      data-start="0"
+      data-duration="60"
+      data-width="1920"
+      data-height="1080"
+    >
+      <!-- AUDIO: classical, public domain. fetch-assets.sh grabs it. -->
+      <audio
+        id="music"
+        class="clip"
+        data-start="0"
+        data-duration="60"
+        data-track-index="0"
+        data-volume="0.55"
+        src="assets/music.mp3"
+      ></audio>
+
+      <!-- The painting, with a slow continuous Ken Burns over the full 60s -->
+      <div
+        id="bg"
+        class="bg-frame clip"
+        data-start="0"
+        data-duration="60"
+        data-track-index="1"
+      >
+        <img id="bg-img" src="assets/angelus.jpg" alt="The Angelus by Jean-François Millet, 1857–1859" />
+      </div>
+
+      <!-- Vignette overlay so text reads against the painting -->
+      <div
+        id="vignette"
+        class="vignette clip"
+        data-start="0"
+        data-duration="60"
+        data-track-index="2"
+      ></div>
+
+      <!-- Top-left stamp present from 5s onward -->
+      <div
+        id="stamp"
+        class="corner-stamp smallcaps clip"
+        data-start="5"
+        data-duration="55"
+        data-track-index="3"
+        style="opacity: 0;"
+      >
+        Doomer Optimism · A Podcast
+      </div>
+
+      <!-- Beat 1 (0.5–8s): Wordmark introduction over the still painting -->
+      <div
+        id="wordmark-block"
+        class="center-block clip"
+        data-start="0.5"
+        data-duration="8"
+        data-track-index="4"
+        style="opacity: 0;"
+      >
+        <div class="wordmark">
+          <span class="doomer">Doomer</span><span class="optimism">Optimism</span>
+        </div>
+      </div>
+
+      <!-- Beat 2 (9–18s): the show's central question -->
+      <div
+        id="question"
+        class="center-block clip"
+        data-start="9"
+        data-duration="9"
+        data-track-index="5"
+        style="opacity: 0;"
+      >
+        <div class="headline">
+          How do we live well<br />
+          <em>in the age of the Machine?</em>
+        </div>
+      </div>
+
+      <!-- Beat 3 (19–32s): the lede -->
+      <div
+        id="lede"
+        class="center-block clip"
+        data-start="19"
+        data-duration="13"
+        data-track-index="6"
+        style="opacity: 0;"
+      >
+        <div class="lede">
+          A pluralistic conversation with farmers, builders, repairers,
+          scholars, and parents — building human-scale alternatives,
+          rooted in the practical work of bread and roses.
+        </div>
+      </div>
+
+      <!-- Beat 4 (33–46s): six pillars -->
+      <div
+        id="pillars"
+        class="center-block clip"
+        data-start="33"
+        data-duration="13"
+        data-track-index="7"
+        style="opacity: 0;"
+      >
+        <div class="pillars-stack">
+          <div class="pillar pl-1">Regenerative agriculture</div>
+          <div class="pillar pl-2">Conservation &amp; environment</div>
+          <div class="pillar pl-3">The built environment</div>
+          <div class="pillar pl-4">Technology &amp; AI</div>
+          <div class="pillar pl-5">Right to repair</div>
+          <div class="pillar pl-6">Family &amp; schooling</div>
+        </div>
+      </div>
+
+      <!-- Beat 5 (47–55s): "300" milestone hook -->
+      <div
+        id="milestone"
+        class="center-block clip"
+        data-start="47"
+        data-duration="8"
+        data-track-index="8"
+        style="opacity: 0;"
+      >
+        <div class="three-hundred">
+          300<span class="small">Episodes · One conversation</span>
+        </div>
+      </div>
+
+      <!-- Beat 6 (56–60s): sign-off -->
+      <div
+        id="signoff"
+        class="footer-card clip"
+        data-start="56"
+        data-duration="4"
+        data-track-index="9"
+        style="opacity: 0;"
+      >
+        <div class="smallcaps">Listen wherever you get podcasts</div>
+        <div class="url">doomeroptimism.com</div>
+      </div>
+
+      <!-- Open/close fade-to-black covers -->
+      <div
+        id="blackout-in"
+        class="blackout clip"
+        data-start="0"
+        data-duration="1.5"
+        data-track-index="20"
+        style="opacity: 1;"
+      ></div>
+      <div
+        id="blackout-out"
+        class="blackout clip"
+        data-start="58.5"
+        data-duration="1.5"
+        data-track-index="20"
+        style="opacity: 0;"
+      ></div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      // Continuous slow Ken Burns over the whole 60s (start slightly
+      // below center, drift upward; scale 1.00 → 1.10).
+      tl.fromTo(
+        '#bg-img',
+        { transform: 'translate(-50%, -48%) scale(1.00)' },
+        { transform: 'translate(-50%, -52%) scale(1.10)', duration: 60, ease: 'none' },
+        0,
+      );
+
+      // Open: fade up from black during the first 1.5s.
+      tl.to('#blackout-in', { opacity: 0, duration: 1.5, ease: 'power2.out' }, 0);
+
+      // Persistent corner stamp from 5s, fades out at the very end.
+      tl.to('#stamp', { opacity: 1, duration: 0.8 }, 5);
+      tl.to('#stamp', { opacity: 0, duration: 0.8 }, 59);
+
+      // Wordmark in at 0.5, hold, fade out by 8.5.
+      tl.to('#wordmark-block', { opacity: 1, duration: 1.2, ease: 'power2.out' }, 0.5);
+      tl.to('#wordmark-block', { opacity: 0, duration: 0.8, ease: 'power2.in' }, 7.5);
+
+      // The question at 9, fade out by 17.8.
+      tl.fromTo(
+        '#question',
+        { opacity: 0, y: 14 },
+        { opacity: 1, y: 0, duration: 1.2, ease: 'power2.out' },
+        9,
+      );
+      tl.to('#question', { opacity: 0, duration: 0.8 }, 17);
+
+      // The lede at 19, fade out by 31.4.
+      tl.fromTo(
+        '#lede',
+        { opacity: 0, y: 14 },
+        { opacity: 1, y: 0, duration: 1.4, ease: 'power2.out' },
+        19,
+      );
+      tl.to('#lede', { opacity: 0, duration: 0.9 }, 30.5);
+
+      // Pillars container, then each row staggers in.
+      tl.to('#pillars', { opacity: 1, duration: 0.6 }, 33);
+      ['.pl-1', '.pl-2', '.pl-3', '.pl-4', '.pl-5', '.pl-6'].forEach((sel, i) => {
+        tl.fromTo(
+          sel,
+          { opacity: 0, y: 16 },
+          { opacity: 1, y: 0, duration: 0.55, ease: 'power2.out' },
+          33.2 + i * 0.55,
+        );
+      });
+      tl.to('#pillars', { opacity: 0, duration: 0.8 }, 45);
+
+      // The "300" hook.
+      tl.fromTo(
+        '#milestone',
+        { opacity: 0, scale: 0.96 },
+        { opacity: 1, scale: 1, duration: 1.0, ease: 'power2.out' },
+        47,
+      );
+      tl.to('#milestone', { opacity: 0, duration: 0.8 }, 54.2);
+
+      // Sign-off.
+      tl.fromTo(
+        '#signoff',
+        { opacity: 0, y: 12 },
+        { opacity: 1, y: 0, duration: 0.9, ease: 'power2.out' },
+        56,
+      );
+
+      // Close: fade to black across the last 1.5s.
+      tl.to('#blackout-out', { opacity: 1, duration: 1.5, ease: 'power2.in' }, 58.5);
+
+      window.__timelines['root'] = tl;
+    </script>
+  </body>
+</html>
