@@ -1,0 +1,117 @@
+name: Watch for new episodes
+
+# Polls the Anchor RSS feed on a schedule. When a new episode shows up
+# that we haven't transcribed yet, it runs the transcript pipeline for
+# just that one episode (--limit-new=1) and tries to match it to the
+# corresponding YouTube video so the homepage embed updates automatically.
+# Opens (or updates) a single PR on the claude/transcripts-backfill
+# branch — the same branch the manual backfill workflow uses, so caches
+# accumulate in one place.
+
+on:
+  schedule:
+    # Every 4 hours. Anchor doesn't update more than a couple times a
+    # week and YouTube uploads can lag the podcast, so polling more
+    # aggressively just burns Action minutes for no benefit. Adjust if
+    # you need faster turnaround.
+    - cron: '17 */4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: transcript-backfill   # share the lock with the manual backfill
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    name: Detect → transcribe → match YouTube → PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install npm deps
+        run: npm install --no-audit --no-fund
+
+      - name: Restore .transcripts/ from PR branch
+        run: |
+          set -e
+          BRANCH="claude/transcripts-backfill"
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            git fetch --depth=1 origin "$BRANCH"
+            git checkout "origin/$BRANCH" -- .transcripts/ 2>/dev/null || echo "  (no .transcripts/ on the branch yet)"
+            SCRIBE=$(ls .transcripts/*.scribe.json 2>/dev/null | wc -l | tr -d ' ')
+            echo "Restored $SCRIBE cached scribe files"
+          else
+            echo "Branch $BRANCH does not exist yet — first run."
+          fi
+
+      # Detect: is there an episode in the RSS feed that we haven't
+      # processed yet? Outputs `new=true` so later steps can branch.
+      - name: Detect new episode
+        id: detect
+        run: |
+          set -e
+          node scripts/detect-new-episode.mjs > detect.out
+          cat detect.out
+          if grep -q '^new=true' detect.out; then
+            echo "new=true" >> "$GITHUB_OUTPUT"
+            grep '^title=' detect.out >> "$GITHUB_OUTPUT" || true
+          else
+            echo "new=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Transcribe + enrich the new episode
+        if: steps.detect.outputs.new == 'true'
+        env:
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          node scripts/transcribe-backfill.mjs \
+            --feed "https://anchor.fm/s/68308b7c/podcast/rss" \
+            --max 500 \
+            --limit-new 1
+
+      # Always try to back-fill youtubeIds, even when no new episode
+      # was detected — YouTube videos sometimes upload after the
+      # podcast, so a previous run's episode may now have a match.
+      - name: Match YouTube videos to recent episodes
+        if: vars.YOUTUBE_CHANNEL_ID != ''
+        env:
+          YOUTUBE_CHANNEL_ID: ${{ vars.YOUTUBE_CHANNEL_ID }}
+        run: |
+          node scripts/match-youtube.mjs --max 25
+
+      - name: Open or update pull request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: claude/transcripts-backfill
+          base: main
+          commit-message: |
+            Watch: new episode + YouTube match
+          title: 'Transcripts backfill (auto-updating)'
+          body: |
+            Auto-updated by `watch-new-episodes.yml`.
+
+            - Most recent run detected new episode: `${{ steps.detect.outputs.new }}`
+            - Title: `${{ steps.detect.outputs.title }}`
+            - YouTube channel matching: `${{ vars.YOUTUBE_CHANNEL_ID != '' && 'enabled' || 'disabled (set YOUTUBE_CHANNEL_ID repo variable)' }}`
+
+            New episodes land with `draft: true` — flip to `false` after reviewing the
+            transcript, summary, and bibliography. The homepage YouTube embed picks up
+            the latest episode that has a `youtubeId` set, regardless of draft state.
+          add-paths: |
+            src/content/episodes/**
+            .transcripts/**
