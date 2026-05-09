@@ -1,9 +1,22 @@
 ---
 import { site, withBase } from '../lib/site';
 import Ornament from './Ornament.astro';
+
+const heroImg = withBase('/hero/Firefly_Gemini%20Flash_An%20editorial%20pen-and-ink%20illustration%20in%20the%20style%20of%20a%20vintage%20Wall%20Street%20Journal%20h%20558999.png');
 ---
 
 <section class="relative overflow-hidden border-b border-umber-300/15">
+  <!-- Background imagery: the WSJ-hedcut-style mountain illustration. Sits to
+       the right; a parchment gradient fades it out under the headline so text
+       stays legible. On mobile we drop it to a faint underlay so the title
+       gets the room. -->
+  <div
+    aria-hidden="true"
+    class="hero-bg absolute inset-0 pointer-events-none"
+    style={`background-image: url('${heroImg}');`}
+  ></div>
+  <div aria-hidden="true" class="hero-fade absolute inset-0 pointer-events-none"></div>
+
   <div class="container-wide pt-16 md:pt-28 pb-20 md:pb-32 relative">
     <div class="max-w-3xl">
       <p class="smallcaps mb-6 flex items-center gap-3">
@@ -25,21 +38,64 @@ import Ornament from './Ornament.astro';
       </div>
     </div>
   </div>
-
-  <!-- decorative horizon ornament -->
-  <svg
-    aria-hidden="true"
-    class="absolute -right-16 top-12 hidden md:block opacity-[0.08]"
-    width="520"
-    height="520"
-    viewBox="0 0 520 520"
-    fill="none"
-  >
-    <circle cx="260" cy="260" r="200" stroke="currentColor" stroke-width="1" />
-    <circle cx="260" cy="260" r="160" stroke="currentColor" stroke-width="1" />
-    <circle cx="260" cy="260" r="120" stroke="currentColor" stroke-width="1" />
-    <circle cx="260" cy="260" r="80" stroke="currentColor" stroke-width="1" />
-    <line x1="60" y1="260" x2="460" y2="260" stroke="currentColor" stroke-width="1" />
-    <line x1="260" y1="60" x2="260" y2="460" stroke="currentColor" stroke-width="1" />
-  </svg>
 </section>
+
+<style>
+  .hero-bg {
+    background-repeat: no-repeat;
+    /* Center-right anchor on desktop so the mountain/turbines stay visible
+       while the dawn-sky negative space falls under the headline. */
+    background-position: right center;
+    background-size: cover;
+    opacity: 0.55;
+    /* Subtle warm cast keeps the parchment palette unified */
+    filter: saturate(0.85) contrast(0.96);
+    mix-blend-mode: multiply;
+  }
+
+  .hero-fade {
+    /* Two stacked gradients: a strong parchment wash from the left
+       (so the headline always sits on clean ground), and a soft top-to-bottom
+       fade so the section meets the page rule cleanly. */
+    background:
+      linear-gradient(
+        to right,
+        var(--paper) 0%,
+        rgba(244, 236, 219, 0.96) 18%,
+        rgba(244, 236, 219, 0.6) 40%,
+        rgba(244, 236, 219, 0.15) 70%,
+        rgba(244, 236, 219, 0) 100%
+      ),
+      linear-gradient(
+        to bottom,
+        rgba(244, 236, 219, 0) 0%,
+        rgba(244, 236, 219, 0) 70%,
+        rgba(244, 236, 219, 0.4) 100%
+      );
+  }
+
+  /* Mobile: smaller screens can't hold the whole image legibly behind text,
+     so we fade it harder and shift the focal point. */
+  @media (max-width: 767px) {
+    .hero-bg {
+      opacity: 0.32;
+      background-position: 70% center;
+    }
+    .hero-fade {
+      background:
+        linear-gradient(
+          to right,
+          var(--paper) 0%,
+          rgba(244, 236, 219, 0.94) 35%,
+          rgba(244, 236, 219, 0.55) 70%,
+          rgba(244, 236, 219, 0.2) 100%
+        ),
+        linear-gradient(
+          to bottom,
+          rgba(244, 236, 219, 0) 0%,
+          rgba(244, 236, 219, 0) 65%,
+          rgba(244, 236, 219, 0.5) 100%
+        );
+    }
+  }
+</style>
