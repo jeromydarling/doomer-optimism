@@ -157,7 +157,10 @@ function guestFromSummary(s) {
   for (let i = 0; i < 4; i++) for (const r of STRIPS) cleaned = cleaned.replace(r, '');
   cleaned = cleaned.trim();
 
-  const m = cleaned.match(/^([A-Z][a-zA-Z'’]+(?:\s+[A-Z][a-zA-Z'’]+){0,2})(?:\s+and\s+([A-Z][a-zA-Z'’]+(?:\s+[A-Z][a-zA-Z'’]+){0,2}))?[\s,]+/);
+  // Require 2+ capitalized words at the start. Single-word matches from
+  // summaries are too noisy ("Birth is not...", "Three friends...", topic
+  // words) so we only accept multi-word proper-name patterns here.
+  const m = cleaned.match(/^([A-Z][a-zA-Z'’]+\s+[A-Z][a-zA-Z'’]+(?:\s+[A-Z][a-zA-Z'’]+)?)(?:\s+and\s+([A-Z][a-zA-Z'’]+(?:\s+[A-Z][a-zA-Z'’]+){0,2}))?[\s,]+/);
   if (!m) return null;
   return isPlausibleName(m[1]) ? m[1] : (m[2] && isPlausibleName(m[2]) ? m[2] : null);
 }
@@ -287,11 +290,11 @@ for (const scribePath of scribeFiles) {
     })
     .join('\n\n');
 
-  const chaptersBlock = enriched.chapters?.length
+  const chaptersBlock = Array.isArray(enriched.chapters) && enriched.chapters.length
     ? '\n## Chapters\n\n' + enriched.chapters.map((c) => `- **${c.start}** — ${c.headline}`).join('\n') + '\n'
     : '';
 
-  const pullQuotesBlock = enriched.pullQuotes?.length
+  const pullQuotesBlock = Array.isArray(enriched.pullQuotes) && enriched.pullQuotes.length
     ? '\n## Pull quotes\n\n' + enriched.pullQuotes.map((q) => `> ${q}`).join('\n\n') + '\n'
     : '';
 
