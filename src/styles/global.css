@@ -137,9 +137,8 @@
   .container-prose { max-width: 68ch; margin: 0 auto; padding: 0 1.25rem; }
 
   /* ---- Wordmark ----------------------------------------------------------
-     "DOOMER Optimism" rendered as the show's editorial juxtaposition: the
-     industrial-machine word in a beat-up typewriter face set in caps, the
-     hand-written human reply in flowing handwritten script. */
+     "DOOMER Optimism" — industrial-machine word in tight typewriter caps
+     beside the hand-written human reply in flowing handwritten script. */
   .wordmark {
     display: inline-flex;
     align-items: baseline;
@@ -151,7 +150,7 @@
     font-family: 'Special Elite', 'Courier Prime', monospace;
     font-weight: 400;
     text-transform: uppercase;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.08em;
     color: #312820;
   }
   .wordmark-optimism {

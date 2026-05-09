@@ -1,6 +1,5 @@
 ---
 import { site, withBase } from '../lib/site';
-import Ornament from './Ornament.astro';
 
 const year = new Date().getFullYear();
 ---
@@ -8,8 +7,7 @@ const year = new Date().getFullYear();
 <footer class="mt-24 border-t border-umber-300/15 bg-parchment-50/60">
   <div class="container-wide py-14 grid gap-12 md:grid-cols-4">
     <div class="md:col-span-2 max-w-md">
-      <div class="flex items-center gap-3 mb-4">
-        <Ornament size={28} />
+      <div class="mb-4">
         <span class="wordmark text-[1.4rem]" aria-label="Doomer Optimism">
           <span class="wordmark-doomer">Doomer</span><span class="wordmark-optimism">Optimism</span>
         </span>
