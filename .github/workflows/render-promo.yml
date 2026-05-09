@@ -94,6 +94,14 @@ jobs:
               exit 1
             fi
             cp "${mp4s[0]}" "out/${{ github.event.inputs.title || 'promo' }}.mp4"
+            # Pull a single frame at ~5s (during the wordmark beat, when
+            # The Angelus is fully visible and the wordmark is up). The
+            # site uses this as the click-to-load poster image so we
+            # don't ship the 89MB MP4 to every visitor.
+            ffmpeg -y -loglevel error \
+              -ss 5 -i "${mp4s[0]}" \
+              -vframes 1 -q:v 2 \
+              "out/poster.jpg"
             ls -lh out/
           } 2>&1 | tee /tmp/promo-logs/stage.log
 
@@ -102,7 +110,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: promo-${{ github.run_number }}
-          path: promo/out/*.mp4
+          path: |
+            promo/out/*.mp4
+            promo/out/poster.jpg
           retention-days: 90
 
       - name: Publish rolling release
@@ -116,13 +126,11 @@ jobs:
             TAG="latest-promo"
             gh release delete "$TAG" -y --cleanup-tag 2>/dev/null || true
             # cwd is `promo/` because of `defaults.run.working-directory`,
-            # so the artifact path is just `out/*.mp4`. (upload-artifact
-            # above uses repo-root-relative paths because that action
-            # ignores the step working-directory.)
+            # so artifact paths are `out/*` (not `promo/out/*`).
             gh release create "$TAG" \
               --title "Latest promo render (run #${{ github.run_number }})" \
               --notes "Auto-built by render-promo.yml on $(date -u +%Y-%m-%dT%H:%M:%SZ). Source commit: ${{ github.sha }}." \
-              out/*.mp4
+              out/*.mp4 out/poster.jpg
           } 2>&1 | tee /tmp/promo-logs/release.log
 
       # Always-run reporter: writes status + last log lines to the

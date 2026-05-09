@@ -6,6 +6,7 @@ import EpisodeCard from '../components/EpisodeCard.astro';
 import PillarCard from '../components/PillarCard.astro';
 import ContributorCard from '../components/ContributorCard.astro';
 import YouTubeEmbed from '../components/YouTubeEmbed.astro';
+import TrailerCard from '../components/TrailerCard.astro';
 import { withBase, site } from '../lib/site';
 
 const allEpisodesIncludingDrafts = (await getCollection('episodes'))
@@ -37,11 +38,25 @@ const contributors = (await getCollection('contributors', (c) => c.data.featured
   <Hero />
 
   {/*
-    Two-column band immediately under the hero: latest YouTube episode on
-    the left, the show's lede + CTAs on the right. The columns share the
-    same vertical rhythm so they read as related-but-distinct ("here's
-    today's dispatch / here's what the show is"). On mobile they stack
-    with the video first.
+    Trailer card. Click-to-load 60-second promo; the poster is fetched
+    eagerly but the 89MB MP4 only downloads on click. Sits between the
+    static hero and the YouTube + lede band so the homepage opens with:
+    illustration → trailer → latest episode → six pillars → recent.
+  */}
+  <section class="container-wide pt-8 md:pt-10">
+    <div class="rule-ornament mb-5">
+      <span class="smallcaps">The trailer</span>
+    </div>
+    <TrailerCard
+      videoUrl={site.promo.videoUrl}
+      posterUrl={site.promo.posterUrl}
+      caption="60 seconds · 300 episodes · one conversation"
+    />
+  </section>
+
+  {/*
+    Two-column band: latest YouTube episode on the left, the show's
+    lede + CTAs on the right. Mobile stacks them with the video first.
   */}
   <section class="container-wide pt-8 md:pt-12 pb-4">
     <div class={`grid gap-x-10 gap-y-8 items-center ${latestWithVideo ? 'lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]' : ''}`}>
