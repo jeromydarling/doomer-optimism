@@ -1,0 +1,139 @@
+---
+// YouTube embed with lazy facade so the iframe doesn't run until the user
+// actually clicks play. We use the maxres thumbnail as a poster and load the
+// real iframe on first interaction; this keeps the homepage under YouTube's
+// bandwidth/cookie footprint until the visitor opts in.
+export interface Props {
+  videoId: string;
+  title?: string;
+  posterAlt?: string;
+  /** Renders the title overlay on the poster. Defaults to true. */
+  showTitleOverlay?: boolean;
+}
+const { videoId, title, posterAlt, showTitleOverlay = true } = Astro.props;
+const poster = `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
+const fallbackPoster = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+---
+
+<div class="yt-embed" data-video-id={videoId}>
+  <button class="yt-embed-facade" type="button" aria-label={`Play${title ? ': ' + title : ''}`}>
+    <img
+      class="yt-embed-poster"
+      src={poster}
+      onerror={`this.onerror=null;this.src='${fallbackPoster}'`}
+      alt={posterAlt ?? (title ? `Thumbnail for ${title}` : 'YouTube video thumbnail')}
+      loading="lazy"
+      decoding="async"
+    />
+    {showTitleOverlay && title && (
+      <span class="yt-embed-title">{title}</span>
+    )}
+    <span class="yt-embed-play" aria-hidden="true">
+      <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
+        <circle cx="30" cy="30" r="30" fill="rgba(20, 14, 8, 0.78)"></circle>
+        <path d="M24 19.5v21l16-10.5z" fill="#f4eddb"></path>
+      </svg>
+    </span>
+  </button>
+</div>
+
+<style>
+  .yt-embed {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    width: 100%;
+    background: #1a140a;
+    overflow: hidden;
+    border: 1px solid var(--rule, rgba(60, 45, 30, 0.18));
+  }
+
+  .yt-embed-facade {
+    position: absolute;
+    inset: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .yt-embed-poster {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    /* Subtle desaturation so the player blends with the parchment palette
+       until clicked; restored on hover so the visitor sees the real frame. */
+    filter: contrast(0.96) saturate(0.85);
+    transition: filter 200ms ease;
+  }
+
+  .yt-embed-facade:hover .yt-embed-poster,
+  .yt-embed-facade:focus-visible .yt-embed-poster {
+    filter: none;
+  }
+
+  .yt-embed-title {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 1.25rem 1.5rem 1rem;
+    background: linear-gradient(0deg, rgba(20, 14, 8, 0.85) 0%, rgba(20, 14, 8, 0) 100%);
+    color: var(--parchment, #f4eddb);
+    font-family: 'Cormorant Garamond', Garamond, serif;
+    font-size: clamp(1.05rem, 2.4vw, 1.6rem);
+    line-height: 1.2;
+    text-align: left;
+    pointer-events: none;
+  }
+
+  .yt-embed-play {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    transition: transform 180ms ease;
+  }
+
+  .yt-embed-facade:hover .yt-embed-play,
+  .yt-embed-facade:focus-visible .yt-embed-play {
+    transform: translate(-50%, -50%) scale(1.06);
+  }
+
+  /* Once an iframe is injected by the script below, hide the facade. */
+  .yt-embed.is-playing .yt-embed-facade {
+    display: none;
+  }
+
+  .yt-embed iframe {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    display: block;
+  }
+</style>
+
+<script>
+  // Click-to-load: replace the facade with a real iframe on first interaction.
+  // We use youtube-nocookie to keep the privacy-respecting variant.
+  document.querySelectorAll<HTMLDivElement>('.yt-embed').forEach((el) => {
+    const btn = el.querySelector<HTMLButtonElement>('.yt-embed-facade');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      const id = el.dataset.videoId;
+      if (!id) return;
+      const iframe = document.createElement('iframe');
+      iframe.src = `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0`;
+      iframe.title = btn.getAttribute('aria-label') ?? 'YouTube video';
+      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+      iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+      iframe.allowFullscreen = true;
+      el.appendChild(iframe);
+      el.classList.add('is-playing');
+    });
+  });
+</script>

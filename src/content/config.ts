@@ -39,7 +39,10 @@ const episodes = defineCollection({
   schema: z.object({
     number: z.number(),
     title: z.string(),
-    guest: z.string(),
+    // Guest is optional because panel/solo episodes don't have a single
+    // identifiable guest, and the bot pipeline omits the field rather than
+    // writing a "Speaker B" sentinel.
+    guest: z.string().optional(),
     guestSlug: reference('contributors').optional(),
     pubDate: z.coerce.date(),
     durationSeconds: z.number().int().nonnegative(),
@@ -57,9 +60,10 @@ const episodes = defineCollection({
           year: z.number().optional(),
           href: z.string().url().optional(),
           isbn: z.string().optional(),
-          kind: z
-            .enum(['book', 'article', 'paper', 'film', 'podcast', 'site'])
-            .default('article'),
+          // Haiku emits a long tail of values here ("publication", "website",
+          // "essay", etc.) that don't all map cleanly to our preferred enum.
+          // Accept any string; BibliographyLink picks rendering by ISBN/href.
+          kind: z.string().default('article'),
         }),
       )
       .default([]),

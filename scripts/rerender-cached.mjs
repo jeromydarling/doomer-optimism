@@ -34,6 +34,9 @@ function normalizeSpeakerLabel(id) {
 function cleanUtteranceText(s) {
   if (!s) return '';
   let t = String(s);
+  // Strip Scribe/Whisper control tokens like "<|agent|>" before anything
+  // else — they break MDX parsing because they look like JSX expressions.
+  t = t.replace(/<\|[^|>]{1,40}\|>/g, '');
   t = t.replace(/\s*[\(\[][^()\[\]]{1,40}[\)\]]/g, '');
   t = t.replace(/^\s*(?:um|uh|erm)[,\.\s]+/i, '');
   t = t.replace(/[,\s]+(?:um|uh|erm)\s*$/i, '');
