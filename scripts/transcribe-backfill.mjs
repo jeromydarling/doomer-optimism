@@ -47,6 +47,20 @@ if (!DRY && (!ELEVEN_KEY || !ANTHROPIC_KEY)) {
   process.exit(1);
 }
 
+// Declared up here (above top-level await) to avoid TDZ when the loop
+// reaches enrichWithHaiku before module evaluation reaches the const below.
+const SHOW_CONTEXT = `You are processing a transcript from Doomer Optimism, a podcast hosted by Ashley Colby Fitzgerald (PhD, Environmental Sociology; co-founder Rizoma Field School). The show explores how to live well in the age of the Machine. Its intellectual lineage runs through Wendell Berry, Ivan Illich, Christopher Lasch, and Morris Berman. It is rooted in Catholic Social Teaching but is ecumenical in conversation.
+
+The site organizes around six content pillars (use these exact slugs):
+- regenerative-agriculture
+- conservation-environment
+- built-environment
+- technology-ai-transhumanism
+- right-to-repair-surveillance
+- tech-limited-child-rearing
+
+You receive a transcript with speaker labels and timestamps. You return a structured analysis via the provided tool. The summary must be written in the show's voice: clear-eyed about systemic fragility, hopeful about practical community-led work, never glib. Bibliography entries should only include works that are actually mentioned or clearly referenced in the transcript — never invent citations. Pull quotes should be verbatim and self-contained.`;
+
 const ROOT = process.cwd();
 const CACHE_DIR = join(ROOT, '.transcripts');
 const AUDIO_DIR = join(CACHE_DIR, 'audio');
@@ -261,17 +275,8 @@ function normalizeSpeakerLabel(id) {
 }
 
 // ---- Claude Haiku enrichment ---------------------------------------------------
-const SHOW_CONTEXT = `You are processing a transcript from Doomer Optimism, a podcast hosted by Ashley Colby Fitzgerald (PhD, Environmental Sociology; co-founder Rizoma Field School). The show explores how to live well in the age of the Machine. Its intellectual lineage runs through Wendell Berry, Ivan Illich, Christopher Lasch, and Morris Berman. It is rooted in Catholic Social Teaching but is ecumenical in conversation.
-
-The site organizes around six content pillars (use these exact slugs):
-- regenerative-agriculture
-- conservation-environment
-- built-environment
-- technology-ai-transhumanism
-- right-to-repair-surveillance
-- tech-limited-child-rearing
-
-You receive a transcript with speaker labels and timestamps. You return a structured analysis via the provided tool. The summary must be written in the show's voice: clear-eyed about systemic fragility, hopeful about practical community-led work, never glib. Bibliography entries should only include works that are actually mentioned or clearly referenced in the transcript — never invent citations. Pull quotes should be verbatim and self-contained.`;
+// SHOW_CONTEXT is declared near the top of this file (before the top-level
+// await loop) to avoid a temporal-dead-zone error.
 
 async function enrichWithHaiku({ title, guest, transcriptText }) {
   const MAX_CHARS = 240_000;
