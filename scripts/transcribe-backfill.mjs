@@ -301,6 +301,9 @@ function wordsToUtterances(words) {
 function cleanUtteranceText(s) {
   if (!s) return '';
   let t = String(s);
+  // Strip Scribe/Whisper-style control tokens like "<|agent|>", "<|en|>" —
+  // they break MDX parsers because they look like JSX expressions.
+  t = t.replace(/<\|[^|>]{1,40}\|>/g, '');
   // Remove parenthetical/bracketed stage directions: "(laughs)", "[music]".
   t = t.replace(/\s*[\(\[][^()\[\]]{1,40}[\)\]]/g, '');
   // Strip leading filler "Um, " / "Uh, " / "Erm, ".

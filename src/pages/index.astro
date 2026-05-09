@@ -5,12 +5,20 @@ import Hero from '../components/Hero.astro';
 import EpisodeCard from '../components/EpisodeCard.astro';
 import PillarCard from '../components/PillarCard.astro';
 import ContributorCard from '../components/ContributorCard.astro';
+import YouTubeEmbed from '../components/YouTubeEmbed.astro';
 import { withBase, site } from '../lib/site';
 
-const allEpisodes = (await getCollection('episodes', (e) => !e.data.draft))
+const allEpisodesIncludingDrafts = (await getCollection('episodes'))
   .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+const allEpisodes = allEpisodesIncludingDrafts.filter((e) => !e.data.draft);
 const featured = allEpisodes.find((e) => e.data.featured) ?? allEpisodes[0];
 const recent = allEpisodes.filter((e) => e.id !== featured.id).slice(0, 6);
+
+// Most recent episode (drafts allowed) that has a YouTube ID set — used
+// for the homepage video band. Drafts qualify because we want to surface
+// "what's actually airing on YouTube right now" even when the full episode
+// notes aren't yet polished. Falls back gracefully if nothing has an ID.
+const latestWithVideo = allEpisodesIncludingDrafts.find((e) => e.data.youtubeId);
 
 const pillars = (await getCollection('pillars')).sort((a, b) => a.data.order - b.data.order);
 const pillarCounts = Object.fromEntries(
@@ -27,6 +35,24 @@ const contributors = (await getCollection('contributors', (c) => c.data.featured
 
 <BaseLayout>
   <Hero />
+
+  {latestWithVideo && (
+    <section class="container-wide pt-8 md:pt-10">
+      <div class="flex items-baseline justify-between gap-4 mb-4">
+        <p class="smallcaps">Latest episode · No. {latestWithVideo.data.number}</p>
+        <a
+          href={withBase(`/episodes/${latestWithVideo.slug}`)}
+          class="smallcaps !text-[0.62rem] !border-b-0 hover:!text-terracotta-500 hidden sm:inline"
+        >
+          Episode notes →
+        </a>
+      </div>
+      <YouTubeEmbed
+        videoId={latestWithVideo.data.youtubeId!}
+        title={latestWithVideo.data.title}
+      />
+    </section>
+  )}
 
   <section class="container-wide pt-10 md:pt-14 pb-2">
     <div class="max-w-2xl">
