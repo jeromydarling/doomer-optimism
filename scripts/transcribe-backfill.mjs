@@ -277,18 +277,14 @@ function wordsToUtterances(words) {
   const utt = [];
   let cur = null;
   for (const w of words) {
-    if (w.type && w.type !== 'word' && w.type !== 'audio_event') continue;
-    // Normalise the raw speaker_id (e.g. "speaker_0") immediately so the
-    // grouping comparison below is apples-to-apples. Without this every word
-    // started a new utterance because cur.speaker held the normalised form
-    // ("A") and `speaker` held the raw form ("speaker_0") — never equal.
+    // Drop annotation events outright — "(laughs)", "(mysterious music)", etc.
+    if (w.type && w.type !== 'word') continue;
     const speaker = normalizeSpeakerLabel(w.speaker_id ?? 'A');
     const text = w.text ?? '';
     if (!cur || cur.speaker !== speaker) {
       if (cur) utt.push(cur);
       cur = { speaker, text, start: (w.start ?? 0) * 1000, end: (w.end ?? 0) * 1000 };
     } else {
-      // No leading space if next token is attached punctuation/closer.
       const sep = (cur.text === '' || /^[.,!?:;'’”)\]}]/.test(text)) ? '' : ' ';
       cur.text += sep + text;
       cur.end = (w.end ?? cur.end) * 1000;
@@ -296,8 +292,48 @@ function wordsToUtterances(words) {
   }
   if (cur) utt.push(cur);
   return utt
-    .map((u) => ({ ...u, text: u.text.trim() }))
+    .map((u) => ({ ...u, text: cleanUtteranceText(u.text) }))
     .filter((u) => u.text.length > 1);
+}
+
+// Light editorial cleanup of an utterance — preserve voice and content,
+// strip the noise that makes a raw STT transcript painful to read.
+function cleanUtteranceText(s) {
+  if (!s) return '';
+  let t = String(s);
+  // Remove parenthetical/bracketed stage directions: "(laughs)", "[music]".
+  t = t.replace(/\s*[\(\[][^()\[\]]{1,40}[\)\]]/g, '');
+  // Strip leading filler "Um, " / "Uh, " / "Erm, ".
+  t = t.replace(/^\s*(?:um|uh|erm)[,\.\s]+/i, '');
+  // Strip trailing same.
+  t = t.replace(/[,\s]+(?:um|uh|erm)\s*$/i, '');
+  // Collapse stutter repetitions: "I, I, I" -> "I"; "the, the" -> "the".
+  // Two-or-more identical words separated only by commas/whitespace.
+  t = t.replace(/\b(\w+)([,\s]+\1\b){1,4}/gi, '$1');
+  // Tidy spacing around punctuation.
+  t = t.replace(/\s+([,\.\?!:;])/g, '$1');
+  t = t.replace(/\s{2,}/g, ' ');
+  // Drop a leading bare acknowledgment if it now sits alone at the start.
+  t = t.replace(/^\s*(?:Mm+|Mhm+|Hm+)[\.,]\s*/i, '');
+  return t.trim();
+}
+
+// Combine consecutive utterances from the same speaker into a single block.
+// After Scribe diarises, you often get "Speaker A: short fragment / Speaker A:
+// longer thought / Speaker A: another fragment" because the model emits a new
+// utterance on long pauses. For reading, those should be one paragraph.
+function mergeAdjacentSameSpeaker(utterances) {
+  const out = [];
+  for (const u of utterances) {
+    const prev = out[out.length - 1];
+    if (prev && prev.speaker === u.speaker) {
+      prev.text = (prev.text + ' ' + u.text).replace(/\s{2,}/g, ' ').trim();
+      prev.end = u.end;
+    } else {
+      out.push({ ...u });
+    }
+  }
+  return out;
 }
 
 function normalizeSpeakerLabel(id) {
@@ -489,20 +525,49 @@ async function loadExistingEpisodes() {
 }
 
 function mapSpeakers(utterances, guestName) {
+  // Step 1: figure out which speaker is Ashley.
+  // Preferred signal: the first utterance in the first ~30 that says
+  // "welcome to Doomer Optimism" / "welcome back to Doomer Optimism" /
+  // "this is Doomer Optimism" / "I have <X> here" / "you're listening to
+  // Doomer Optimism" — that speaker is the host. The previous "longest
+  // talker = Ashley" heuristic was wrong for interview shows where the
+  // guest dominates talk-time.
+  const INTRO_RE = /\b(?:welcome (?:back )?to|this is|you'?re listening to)\s+(?:do(?:omer)?\s*optimism|do(?:omer)?\s*op)|i have\s+\w+\s+(?:here|with me|on)|hi(?:,| ).*welcome/i;
+  let hostLabel = null;
+  for (const u of utterances.slice(0, 30)) {
+    if (INTRO_RE.test(u.text)) { hostLabel = u.speaker; break; }
+  }
+
+  // Fallback: longest cumulative talk time (the original heuristic).
+  if (!hostLabel) {
+    const totals = new Map();
+    for (const u of utterances) totals.set(u.speaker, (totals.get(u.speaker) ?? 0) + (u.end - u.start));
+    hostLabel = [...totals.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  }
+
+  // Step 2: rank everyone else by talk time so the longest non-host gets
+  // the guest name; the rest stay as "Speaker C/D/...".
   const totals = new Map();
   for (const u of utterances) totals.set(u.speaker, (totals.get(u.speaker) ?? 0) + (u.end - u.start));
-  const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+  const others = [...totals.entries()]
+    .filter(([label]) => label !== hostLabel)
+    .sort((a, b) => b[1] - a[1])
+    .map(([label]) => label);
+
   const map = {};
-  ranked.forEach(([label], i) => {
-    if (i === 0) map[label] = 'Ashley Colby Fitzgerald';
-    else if (i === 1 && guestName) map[label] = guestName;
+  if (hostLabel) map[hostLabel] = 'Ashley Colby Fitzgerald';
+  others.forEach((label, i) => {
+    if (i === 0 && guestName) map[label] = guestName;
     else map[label] = `Speaker ${label}`;
   });
   return map;
 }
 
 async function buildMdx({ item, number, slug, utterances, speakers, enriched, existingPath }) {
-  const transcriptBody = utterances
+  // Merge consecutive same-speaker utterances into a single paragraph so the
+  // page reads like a transcript instead of a chat log of one-line fragments.
+  const merged = mergeAdjacentSameSpeaker(utterances);
+  const transcriptBody = merged
     .map((u) => {
       const ts = formatTimestamp(u.start);
       const name = speakers[u.speaker] ?? `Speaker ${u.speaker}`;
@@ -527,11 +592,17 @@ async function buildMdx({ item, number, slug, utterances, speakers, enriched, ex
     return `---\n${frontmatter}\n---\n${newBody}`;
   }
 
-  const guest = speakers['B'] ?? speakers['A'] ?? 'Unknown Guest';
+  // Only emit a `guest:` field when we actually have a real name. Writing
+  // `guest: "Speaker B"` to the schema-validated frontmatter is worse than
+  // omitting it — the schema makes it optional and the page can fall back.
+  const rawGuest = speakers['B'] ?? speakers['A'] ?? null;
+  const guestLine = (rawGuest && !/^Speaker\s+[A-Z]$/.test(rawGuest))
+    ? `guest: ${yamlString(rawGuest)}`
+    : null;
   const fm = [
     `number: ${number ?? '# TODO'}`,
     `title: ${yamlString(stripEpisodePrefix(item.title))}`,
-    `guest: ${yamlString(guest)}`,
+    guestLine,
     `pubDate: ${formatDate(item.pubDate)}`,
     `durationSeconds: ${item.durationSeconds || 0}`,
     `pillar: ${enriched.suggestedPillar ?? 'technology-ai-transhumanism # TODO: review'}`,
@@ -556,7 +627,12 @@ function splitFrontmatter(raw) {
 
 function yamlString(s) { return JSON.stringify(String(s ?? '').replace(/\s+/g, ' ').trim()); }
 function escapeYamlMultiline(s) {
-  return String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, 800).replace(/\n/g, '\n  ');
+  // Collapse to single line then re-wrap at ~80 cols so the summary reads
+  // cleanly in YAML block-scalar form. We used to slice(0, 800) which
+  // chopped mid-sentence; let the literal block carry whatever Haiku gave us.
+  const flat = String(s ?? '').replace(/\s+/g, ' ').trim();
+  const wrapped = flat.replace(/(.{1,80})(?:\s|$)/g, '$1\n  ').trim();
+  return wrapped;
 }
 function stripEpisodePrefix(t) { return t.replace(/^(?:DO|Episode|Ep\.?)\s*\d+\s*[—\-:|]\s*/i, '').trim(); }
 function formatDate(rfc) {
