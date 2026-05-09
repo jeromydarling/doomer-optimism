@@ -28,9 +28,12 @@ public/_demo/*.svg
 public/_demo/*.png
 public/_demo/*.html
 
-# Transcript pipeline working files
-.transcripts/audio/
-.transcripts/*.tmp.json
+# Transcript pipeline working files. The full .transcripts/ directory
+# lives only on the claude/transcripts-backfill PR branch (where the
+# workflow's peter-evans add-paths commits it for durable caching). On
+# main it should never be tracked — checkouts of the PR branch into
+# the working tree shouldn't trigger commits to main.
+.transcripts/
 
 # Hero image build artifacts (generated from source PNG by build step)
 public/hero/hero-bg.jpg
