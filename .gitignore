@@ -31,3 +31,7 @@ public/_demo/*.html
 # Transcript pipeline working files
 .transcripts/audio/
 .transcripts/*.tmp.json
+
+# Hero image build artifacts (generated from source PNG by build step)
+public/hero/hero-bg.jpg
+public/hero/hero-bg.webp
