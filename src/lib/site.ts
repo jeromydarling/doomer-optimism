@@ -56,6 +56,24 @@ export const formatDuration = (seconds: number) => {
   return `${m} min`;
 };
 
+/**
+ * Trim a long body of prose to roughly `maxChars` characters, preferring
+ * to break on a sentence boundary. Used to turn an AI-generated episode
+ * summary into a teaser line for surfaces like the homepage video card.
+ */
+export const excerpt = (text: string | undefined | null, maxChars = 260): string => {
+  const flat = String(text ?? '').replace(/\s+/g, ' ').trim();
+  if (!flat) return '';
+  if (flat.length <= maxChars) return flat;
+  const slice = flat.slice(0, maxChars);
+  // Look for the latest sentence-end in the slice; fall back to last
+  // word boundary if no sentence break is found.
+  const sentenceEnd = Math.max(slice.lastIndexOf('. '), slice.lastIndexOf('? '), slice.lastIndexOf('! '));
+  if (sentenceEnd > maxChars * 0.5) return slice.slice(0, sentenceEnd + 1);
+  const wordEnd = slice.lastIndexOf(' ');
+  return (wordEnd > 0 ? slice.slice(0, wordEnd) : slice).replace(/[,;:\s]+$/, '') + '…';
+};
+
 export const withBase = (path: string) => {
   const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
   if (!path.startsWith('/')) path = '/' + path;
