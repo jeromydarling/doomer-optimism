@@ -38,32 +38,15 @@ const contributors = (await getCollection('contributors', (c) => c.data.featured
   <Hero />
 
   {/*
-    Two-column band: latest YouTube episode on the left, the show's
-    lede + CTAs on the right. Mobile stacks them with the video first.
-    Two-column kicks in at md (768px) so tablets and small laptops see
-    it side-by-side, not just at lg.
+    Two-column band: site lede + CTAs on the LEFT, latest YouTube
+    episode on the RIGHT. The right column needs to read as "today's
+    dispatch", not as a description of the lede on its left — so the
+    video sits visually downstream. On mobile they stack: video first
+    (eyecatch), lede underneath. md+ shows them side-by-side.
   */}
   <section class="container-wide pt-8 md:pt-10 pb-4">
-    <div class={`grid gap-x-10 gap-y-8 items-center ${latestWithVideo ? 'md:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]' : ''}`}>
-      {latestWithVideo && (
-        <div>
-          <div class="flex items-baseline justify-between gap-4 mb-3">
-            <p class="smallcaps">Latest episode · No. {latestWithVideo.data.number}</p>
-            <a
-              href={withBase(`/episodes/${latestWithVideo.slug}`)}
-              class="smallcaps !text-[0.62rem] !border-b-0 hover:!text-terracotta-500 hidden sm:inline"
-            >
-              Episode notes →
-            </a>
-          </div>
-          <YouTubeEmbed
-            videoId={latestWithVideo.data.youtubeId!}
-            title={latestWithVideo.data.title}
-          />
-        </div>
-      )}
-
-      <div class="md:border-l md:border-umber-300/20 md:pl-10">
+    <div class={`grid gap-x-10 gap-y-8 items-center ${latestWithVideo ? 'md:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]' : ''}`}>
+      <div class="order-2 md:order-1 md:pr-2">
         <p class="smallcaps mb-3">Episode 300 + a movement</p>
         <p class="font-serif text-lg md:text-xl leading-relaxed text-umber-100 mb-6">
           A pluralistic conversation with farmers, builders, repairers, scholars, and parents
@@ -83,6 +66,24 @@ const contributors = (await getCollection('contributors', (c) => c.data.featured
           </button>
         </div>
       </div>
+
+      {latestWithVideo && (
+        <div class="order-1 md:order-2 md:border-l md:border-umber-300/20 md:pl-10">
+          <div class="flex items-baseline justify-between gap-4 mb-3">
+            <p class="smallcaps">Latest episode · No. {latestWithVideo.data.number}</p>
+            <a
+              href={withBase(`/episodes/${latestWithVideo.slug}`)}
+              class="smallcaps !text-[0.62rem] !border-b-0 hover:!text-terracotta-500 hidden sm:inline"
+            >
+              Episode notes →
+            </a>
+          </div>
+          <YouTubeEmbed
+            videoId={latestWithVideo.data.youtubeId!}
+            title={latestWithVideo.data.title}
+          />
+        </div>
+      )}
     </div>
   </section>
 
