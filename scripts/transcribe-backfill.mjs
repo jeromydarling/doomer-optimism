@@ -352,22 +352,36 @@ async function enrichWithHaiku({ title, guest, transcriptText }) {
     ],
   };
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-beta': 'prompt-caching-2024-07-31',
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`anthropic ${res.status}: ${await res.text()}`);
-  const j = await res.json();
-  const toolUse = (j.content ?? []).find((c) => c.type === 'tool_use');
-  if (!toolUse) throw new Error('Haiku did not return a tool_use block');
-  return toolUse.input;
+  // Anthropic rate-limits per minute. On 429/529/503, honor the Retry-After
+  // header when present, else exponential backoff with jitter. Up to 8 attempts.
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'prompt-caching-2024-07-31',
+      },
+      body: JSON.stringify(body),
+    });
+    if (res.status === 429 || res.status === 529 || res.status === 503) {
+      const ra = parseFloat(res.headers.get('retry-after'));
+      const wait = (Number.isFinite(ra) ? ra : Math.min(180, 20 * Math.pow(2, attempt))) + Math.random() * 5;
+      log(`  ⏸  anthropic ${res.status}; sleeping ${wait.toFixed(1)}s (attempt ${attempt + 1}/8)`);
+      await sleep(wait * 1000);
+      continue;
+    }
+    if (!res.ok) throw new Error(`anthropic ${res.status}: ${await res.text()}`);
+    const j = await res.json();
+    const toolUse = (j.content ?? []).find((c) => c.type === 'tool_use');
+    if (!toolUse) throw new Error('Haiku did not return a tool_use block');
+    return toolUse.input;
+  }
+  throw new Error('anthropic: too many rate-limit retries');
 }
+
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 // ---- Helpers, MDX generation ---------------------------------------------------
 function parseArgs(argv) {
