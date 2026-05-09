@@ -17,9 +17,15 @@ const year = new Date().getFullYear();
         rooted in the practical work of building human-scale alternatives.
       </p>
       <p class="smallcaps mt-6">Brought to you by</p>
-      <a href={site.sponsor.href} class="font-display text-xl !border-b-0 hover:!text-terracotta-500 text-umber-300">
-        {site.sponsor.name} <span class="text-umber-100 font-serif italic text-base">— {site.sponsor.tagline}</span>
-      </a>
+      <p class="font-display text-xl text-umber-300">
+        <a
+          href={site.sponsor.href}
+          class="!border-b-0 font-bold !text-terracotta-500 hover:!text-terracotta-400 underline decoration-terracotta-500/40 underline-offset-4 hover:decoration-terracotta-400"
+        >
+          {site.sponsor.name}
+        </a>
+        <span class="text-umber-100 font-serif italic text-base">— {site.sponsor.tagline}</span>
+      </p>
     </div>
 
     <div>
