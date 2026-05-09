@@ -45,8 +45,11 @@ const heroImg = withBase('/hero/Firefly_Gemini%20Flash_An%20editorial%20pen-and-
     position: absolute;
     inset: 0;
     display: flex;
-    align-items: center;
-    padding-inline: clamp(1.25rem, 5%, 4rem);
+    align-items: flex-start;
+    /* Top padding pulls the headline up into the open dawn-sky portion
+       of the illustration (roughly the upper-left quadrant) instead of
+       the vertical center where it would crowd the orchard line. */
+    padding: 6% clamp(1.25rem, 5%, 4rem) 0;
     pointer-events: none;
   }
 
