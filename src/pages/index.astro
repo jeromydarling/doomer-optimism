@@ -36,35 +36,44 @@ const contributors = (await getCollection('contributors', (c) => c.data.featured
 <BaseLayout>
   <Hero />
 
-  {latestWithVideo && (
-    <section class="container-wide pt-8 md:pt-10">
-      <div class="flex items-baseline justify-between gap-4 mb-4">
-        <p class="smallcaps">Latest episode · No. {latestWithVideo.data.number}</p>
-        <a
-          href={withBase(`/episodes/${latestWithVideo.slug}`)}
-          class="smallcaps !text-[0.62rem] !border-b-0 hover:!text-terracotta-500 hidden sm:inline"
-        >
-          Episode notes →
-        </a>
-      </div>
-      <YouTubeEmbed
-        videoId={latestWithVideo.data.youtubeId!}
-        title={latestWithVideo.data.title}
-      />
-    </section>
-  )}
+  {/*
+    Two-column band immediately under the hero: latest YouTube episode on
+    the left, the show's lede + CTAs on the right. The columns share the
+    same vertical rhythm so they read as related-but-distinct ("here's
+    today's dispatch / here's what the show is"). On mobile they stack
+    with the video first.
+  */}
+  <section class="container-wide pt-8 md:pt-12 pb-4">
+    <div class={`grid gap-x-10 gap-y-8 items-center ${latestWithVideo ? 'lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]' : ''}`}>
+      {latestWithVideo && (
+        <div>
+          <div class="flex items-baseline justify-between gap-4 mb-3">
+            <p class="smallcaps">Latest episode · No. {latestWithVideo.data.number}</p>
+            <a
+              href={withBase(`/episodes/${latestWithVideo.slug}`)}
+              class="smallcaps !text-[0.62rem] !border-b-0 hover:!text-terracotta-500 hidden sm:inline"
+            >
+              Episode notes →
+            </a>
+          </div>
+          <YouTubeEmbed
+            videoId={latestWithVideo.data.youtubeId!}
+            title={latestWithVideo.data.title}
+          />
+        </div>
+      )}
 
-  <section class="container-wide pt-10 md:pt-14 pb-2">
-    <div class="max-w-2xl">
-      <p class="smallcaps mb-4">Episode 300 + a movement</p>
-      <p class="font-serif text-lg md:text-xl leading-relaxed text-umber-100 max-w-prose mb-7">
-        A pluralistic conversation with farmers, builders, repairers, scholars, and parents
-        building human-scale alternatives — clear-eyed about systemic fragility,
-        rooted in the practical work of bread and roses.
-      </p>
-      <div class="flex flex-wrap gap-3">
-        <a href={withBase('/episodes')} class="btn btn-primary">Listen to episodes</a>
-        <a href={withBase('/about')} class="btn">What is Doomer Optimism?</a>
+      <div class="lg:border-l lg:border-umber-300/20 lg:pl-10">
+        <p class="smallcaps mb-3">Episode 300 + a movement</p>
+        <p class="font-serif text-lg md:text-xl leading-relaxed text-umber-100 mb-6">
+          A pluralistic conversation with farmers, builders, repairers, scholars, and parents
+          building human-scale alternatives — clear-eyed about systemic fragility,
+          rooted in the practical work of bread and roses.
+        </p>
+        <div class="flex flex-wrap gap-3">
+          <a href={withBase('/episodes')} class="btn btn-primary">Listen to episodes</a>
+          <a href={withBase('/about')} class="btn">What is Doomer Optimism?</a>
+        </div>
       </div>
     </div>
   </section>
