@@ -2,11 +2,13 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { site } from '../../lib/site';
 
-// One playlist, every episode. Drives both the embed and the
-// "Watch on YouTube" subscribe button.
+// One playlist, every episode. Drives the "Browse on YouTube" CTA and
+// the YouTube subscribe pill. We deliberately don't embed an iframe
+// (YouTube's embed only shows one video at a time; the playlist queue
+// is buried behind a player control). Cleaner to send people to the
+// playlist itself.
 const playlistId = site.social.youtubePlaylistId;
 const watchUrl = `https://www.youtube.com/playlist?list=${playlistId}`;
-const embedUrl = `https://www.youtube-nocookie.com/embed/videoseries?list=${playlistId}&rel=0`;
 
 // Subscribe destinations, in display order. `kind` drives the icon.
 const subscribeLinks: Array<{ label: string; href: string; kind: 'youtube' | 'spotify' | 'apple' | 'substack' | 'rss' }> = [
@@ -31,7 +33,7 @@ const subscribeLinks: Array<{ label: string; href: string; kind: 'youtube' | 'sp
     </p>
   </div>
 
-  {/* Subscribe bar — single row of pills above the embed */}
+  {/* Subscribe bar — single row of pills */}
   <div class="container-wide pt-6 pb-8 border-b border-umber-300/15">
     <p class="smallcaps mb-4">Subscribe</p>
     <ul class="flex flex-wrap gap-2 md:gap-3">
@@ -68,24 +70,40 @@ const subscribeLinks: Array<{ label: string; href: string; kind: 'youtube' | 'sp
     </ul>
   </div>
 
-  {/* Playlist embed — full-width 16:9 */}
-  <div class="container-wide pt-8 md:pt-10 pb-24">
-    <div class="playlist-frame">
-      <iframe
-        src={embedUrl}
-        title="Doomer Optimism — full episode playlist"
-        loading="lazy"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-        referrerpolicy="strict-origin-when-cross-origin"
-        allowfullscreen
-      ></iframe>
-    </div>
-    <p class="smallcaps mt-4 text-center">
-      <a href={watchUrl} target="_blank" rel="noopener" class="!border-b-0 hover:!text-terracotta-500">
-        View the full playlist on YouTube →
-      </a>
+  {/*
+    Browse-on-YouTube CTA. We deliberately don't embed a single-video
+    iframe here — YouTube's embed only shows one video at a time, and
+    burying the playlist queue behind a player control is worse UX
+    than a clean "go see them all on YouTube" door.
+  */}
+  <section class="container-wide py-16 md:py-24 text-center">
+    <p class="smallcaps !text-umber-200 mb-4">Watch the archive</p>
+    <h2 class="!text-3xl md:!text-5xl mb-4 max-w-3xl mx-auto leading-tight">
+      Every conversation, on the YouTube playlist.
+    </h2>
+    <p class="font-serif text-lg md:text-xl text-umber-100 max-w-2xl mx-auto mb-9">
+      300+ episodes in chronological order. The playlist updates the moment
+      a new episode goes live.
     </p>
-  </div>
+    <a
+      href={watchUrl}
+      target="_blank"
+      rel="noopener"
+      class="btn !bg-terracotta-500 !text-parchment-100 !border-terracotta-500 hover:!bg-terracotta-400 hover:!border-terracotta-400 hover:!text-parchment-50 !text-base !px-6 !py-3 !tracking-[0.18em]"
+    >
+      Browse the playlist on YouTube →
+    </a>
+    <p class="smallcaps !text-umber-200 mt-12">Or jump straight to</p>
+    <ul class="flex flex-wrap gap-2 md:gap-3 justify-center mt-4">
+      {subscribeLinks.filter((l) => l.kind !== 'youtube').slice(0, 3).map((l) => (
+        <li>
+          <a href={l.href} class="subscribe-pill" target="_blank" rel="noopener" data-kind={l.kind}>
+            <span>{l.label}</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  </section>
 </BaseLayout>
 
 <style>
@@ -125,21 +143,4 @@ const subscribeLinks: Array<{ label: string; href: string; kind: 'youtube' | 'sp
   .subscribe-pill[data-kind="apple"]     .subscribe-pill-icon { color: #b85a99; }
   .subscribe-pill[data-kind="substack"]  .subscribe-pill-icon { color: #ff6719; }
   .subscribe-pill[data-kind="rss"]       .subscribe-pill-icon { color: #f26522; }
-
-  .playlist-frame {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 16 / 9;
-    background: #0d0a06;
-    border: 1px solid rgba(60, 45, 30, 0.18);
-    overflow: hidden;
-  }
-  .playlist-frame iframe {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    border: 0;
-    display: block;
-  }
 </style>
