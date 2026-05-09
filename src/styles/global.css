@@ -10,7 +10,7 @@
 @import '@fontsource/inter/400.css';
 @import '@fontsource/inter/500.css';
 @import '@fontsource/special-elite/400.css';
-@import '@fontsource/italianno/400.css';
+@import '@fontsource/sacramento/400.css';
 
 @tailwind base;
 @tailwind components;
@@ -137,10 +137,9 @@
   .container-prose { max-width: 68ch; margin: 0 auto; padding: 0 1.25rem; }
 
   /* ---- Wordmark ----------------------------------------------------------
-     "Doomer Optimism" rendered as the show's editorial juxtaposition: the
-     industrial-machine word in a beat-up typewriter face, the hand-written
-     human reply in flowing calligraphic script. Heights are tuned so the
-     two pieces sit on a shared baseline despite very different x-heights. */
+     "DOOMER Optimism" rendered as the show's editorial juxtaposition: the
+     industrial-machine word in a beat-up typewriter face set in caps, the
+     hand-written human reply in flowing handwritten script. */
   .wordmark {
     display: inline-flex;
     align-items: baseline;
@@ -151,21 +150,21 @@
   .wordmark-doomer {
     font-family: 'Special Elite', 'Courier Prime', monospace;
     font-weight: 400;
-    letter-spacing: 0.01em;
+    text-transform: uppercase;
+    letter-spacing: -0.01em;
     color: #312820;
-    text-transform: none;
   }
   .wordmark-optimism {
-    font-family: 'Italianno', 'Apple Chancery', cursive;
+    font-family: 'Sacramento', 'Apple Chancery', cursive;
     font-weight: 400;
     color: var(--terracotta);
-    /* Italianno has a low x-height — bump size so it visually balances the
-       chunkier typewriter set "Doomer" beside it. */
-    font-size: 1.7em;
-    line-height: 0.85;
+    /* Sacramento sits with a higher x-height than Italianno; modest size
+       bump is enough to balance the chunky typewriter caps beside it. */
+    font-size: 1.35em;
+    line-height: 0.9;
     letter-spacing: 0.005em;
-    margin-left: -0.04em;
-    transform: translateY(0.06em);
+    margin-left: 0.06em;
+    transform: translateY(0.04em);
   }
 
   .pillar-pill {
