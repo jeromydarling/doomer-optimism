@@ -15,6 +15,10 @@ on:
         description: 'Single episode guid or slug (overrides max). Leave blank for batch.'
         required: false
         default: ''
+      limit_new:
+        description: 'Cap on FRESH transcriptions per run (cached episodes don''t count). 0 = no cap.'
+        required: false
+        default: '0'
       dry_run:
         description: 'List episodes only — no downloads, no API calls'
         required: false
@@ -80,6 +84,9 @@ jobs:
           ARGS="--feed '${{ github.event.inputs.feed }}' --max ${{ github.event.inputs.max }}"
           if [ "${{ github.event.inputs.only }}" != "" ]; then
             ARGS="$ARGS --only '${{ github.event.inputs.only }}'"
+          fi
+          if [ "${{ github.event.inputs.limit_new }}" != "0" ] && [ -n "${{ github.event.inputs.limit_new }}" ]; then
+            ARGS="$ARGS --limit-new ${{ github.event.inputs.limit_new }}"
           fi
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
             ARGS="$ARGS --dry-run"

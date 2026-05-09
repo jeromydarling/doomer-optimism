@@ -21,7 +21,7 @@
  *     node scripts/transcribe-backfill.mjs \
  *       --feed "https://anchor.fm/s/68308b7c/podcast/rss" \
  *       --max 500 \
- *       [--dry-run] [--only=<guid-or-slug>]
+ *       [--dry-run] [--only=<guid-or-slug>] [--limit-new=N]
  */
 
 import { readFile, writeFile, readdir, mkdir } from 'node:fs/promises';
@@ -37,6 +37,7 @@ const FEED = args.feed ?? 'https://anchor.fm/s/68308b7c/podcast/rss';
 const MAX = Number(args.max ?? 500);
 const DRY = !!args['dry-run'];
 const ONLY = args.only ?? null;
+const LIMIT_NEW = Number(args['limit-new'] ?? 0);  // 0 = unlimited; else cap how many *fresh* (non-cached) episodes to process
 
 const ELEVEN_KEY = process.env.ELEVENLABS_API_KEY;
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
@@ -80,9 +81,19 @@ log(`  Found ${items.length} episodes in feed; processing ${slice.length}.`);
 const existing = await loadExistingEpisodes();
 
 const results = [];
+let newProcessed = 0;
 for (const it of slice) {
+  // Pre-check the cache so we can stop after N fresh transcriptions.
+  const txPath = join(CACHE_DIR, `${shortHash(it.guid)}.scribe.json`);
+  const cached = existsSync(txPath);
+  if (LIMIT_NEW > 0 && !cached && newProcessed >= LIMIT_NEW) {
+    log('');
+    log(`Hit --limit-new ${LIMIT_NEW}; stopping before any further fresh transcriptions.`);
+    break;
+  }
   try {
     results.push(await processEpisode(it));
+    if (!cached) newProcessed++;
   } catch (err) {
     log(`  ✖ ${it.guid}: ${err.message}`);
     results.push({ guid: it.guid, title: it.title, error: err.message });
@@ -92,7 +103,7 @@ for (const it of slice) {
 const ok = results.filter((r) => !r.error);
 const failed = results.filter((r) => r.error);
 log('');
-log(`Done. ${ok.length} processed, ${failed.length} failed.`);
+log(`Done. ${ok.length} processed (${newProcessed} freshly transcribed), ${failed.length} failed.`);
 if (failed.length) {
   log('Failures:');
   failed.forEach((r) => log(`  ${r.guid}  ${r.title}  →  ${r.error}`));
