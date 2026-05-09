@@ -1,0 +1,111 @@
+name: Render promo video
+
+# Builds the 60-second podcast promo MP4 in CI — no local FFmpeg, no
+# manual asset fetch, no Puppeteer download on the user's machine.
+# Runs on demand or whenever the composition changes.
+
+on:
+  workflow_dispatch:
+    inputs:
+      title:
+        description: 'Optional: short label for this render (shows up in artifact name)'
+        required: false
+        default: 'promo'
+  push:
+    branches: [main]
+    paths:
+      - 'promo/index.html'
+      - 'promo/compositions/**'
+      - 'promo/fetch-assets.sh'
+      - 'promo/package.json'
+      - '.github/workflows/render-promo.yml'
+
+permissions:
+  contents: write   # needed to upload artifacts + (optional) create release
+
+concurrency:
+  group: render-promo
+  cancel-in-progress: true
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: promo
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          ffmpeg -version | head -1
+
+      # Pre-warm hyperframes CLI + its Puppeteer Chromium bundle. We pin
+      # the same version package.json uses so the 'npm run *' scripts pick
+      # this up and don't re-download the world.
+      - name: Install hyperframes (one-shot, primes Puppeteer)
+        run: |
+          npm install --no-audit --no-fund hyperframes@0.5.5 puppeteer@22
+
+      - name: Fetch public-domain assets (Angelus + Bach)
+        run: ./fetch-assets.sh
+
+      - name: Lint + validate composition
+        run: |
+          npx --yes hyperframes@0.5.5 lint
+          npx --yes hyperframes@0.5.5 validate
+          npx --yes hyperframes@0.5.5 inspect
+
+      - name: Render MP4
+        run: |
+          npx --yes hyperframes@0.5.5 render
+          ls -lh *.mp4 || ls -lh dist/*.mp4 || true
+
+      # The output filename varies depending on hyperframes' default. Find
+      # whatever .mp4 was produced and rename to a stable label.
+      - name: Stage rendered file
+        run: |
+          set -e
+          mkdir -p out
+          shopt -s globstar nullglob
+          mp4s=( **/*.mp4 )
+          if [ ${#mp4s[@]} -eq 0 ]; then
+            echo "No .mp4 produced — render likely failed." >&2
+            exit 1
+          fi
+          cp "${mp4s[0]}" "out/${{ github.event.inputs.title || 'promo' }}.mp4"
+          ls -lh out/
+
+      - name: Upload as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: promo-${{ github.run_number }}
+          path: promo/out/*.mp4
+          retention-days: 90
+
+      # Bonus: also publish a copy to a tagged release so the URL is
+      # stable and shareable. Skipped for non-main pushes; on
+      # workflow_dispatch we always publish so Ashley has something to
+      # point to.
+      - name: Upload to a rolling release tag (latest-promo)
+        if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          TAG="latest-promo"
+          # Recreate the rolling tag so it always points at the freshest commit.
+          gh release delete "$TAG" -y --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" \
+            --title "Latest promo render (run #${{ github.run_number }})" \
+            --notes "Auto-built by render-promo.yml on $(date -u +%Y-%m-%dT%H:%M:%SZ). Source commit: ${{ github.sha }}." \
+            promo/out/*.mp4
