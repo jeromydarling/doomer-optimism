@@ -14,8 +14,8 @@ export const site = {
     spotify: 'https://anchor.fm/doomer-optimism',
   },
   sponsor: {
-    name: 'TheCROS',
-    tagline: 'Catholic Social Teaching, encoded.',
+    name: 'CROS',
+    tagline: 'replacing Silicon Valley with Sanctus Valley.',
     href: 'https://thecros.app',
   },
   // Stable URLs for the auto-rendered 60-second promo. Updated on
