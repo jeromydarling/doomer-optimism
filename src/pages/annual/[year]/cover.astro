@@ -1,0 +1,406 @@
+---
+import { getCollection } from 'astro:content';
+import { site } from '../../../lib/site';
+import Ornament from '../../../components/Ornament.astro';
+
+/**
+ * /annual/[year]/cover — print-ready front + spine + back cover spread.
+ *
+ * Trim: 6×9" paperback. Spine width is parametric — adjust SPINE_INCHES based
+ * on the final page count after rendering the interior (Lulu's spine calculator:
+ * cream 60# uncoated ≈ 0.0025"/page; 150 pages ≈ 0.375", 200 pages ≈ 0.5").
+ *
+ * To export as a Lulu-ready cover PDF:
+ *   1. Open this page in Chrome
+ *   2. Cmd+P → More settings → Paper size → Custom → 12.75" × 9.25" (or whatever
+ *      WIDTH_INCHES and HEIGHT_INCHES below evaluate to with bleed)
+ *   3. Margins: None · Background graphics: ON
+ *   4. Save as PDF → upload to Lulu as the cover file
+ */
+
+export async function getStaticPaths() {
+  const articles = await getCollection('articles', (a) => !a.data.draft);
+  const years = [...new Set(articles.map((a) => a.data.pubDate.getFullYear()))].sort();
+  const currentYear = new Date().getFullYear();
+  if (!years.includes(currentYear)) years.push(currentYear);
+  return years.map((y) => ({ params: { year: String(y) } }));
+}
+
+const { year } = Astro.params;
+const Y = Number(year);
+
+// --- Cover dimensions (parametric) -----------------------------------------------
+const TRIM_WIDTH = 6;          // inches per page
+const TRIM_HEIGHT = 9;
+const BLEED = 0.125;           // outside edges
+const SPINE_INCHES = 0.5;      // adjust after final page count
+const WIDTH_INCHES = TRIM_WIDTH * 2 + SPINE_INCHES + BLEED * 2;
+const HEIGHT_INCHES = TRIM_HEIGHT + BLEED * 2;
+
+// Pull contributing voices for the back-cover credit list
+const contributors = (await getCollection('contributors', (c) => c.data.featured))
+  .map((c) => c.data.name)
+  .slice(0, 9);
+
+const articles = (await getCollection('articles', (a) => !a.data.draft && a.data.pubDate.getFullYear() === Y));
+const episodes = (await getCollection('episodes', (e) => !e.data.draft && e.data.pubDate.getFullYear() === Y));
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Doomer Optimism Annual {Y} — Cover</title>
+    <meta name="robots" content="noindex" />
+    <style is:global define:vars={{
+      widthIn: `${WIDTH_INCHES}in`,
+      heightIn: `${HEIGHT_INCHES}in`,
+      bleedIn: `${BLEED}in`,
+      spineIn: `${SPINE_INCHES}in`,
+    }}>
+      @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@400;500&display=swap');
+
+      :root {
+        --paper: #F4ECDB;
+        --paper-deep: #E8DBBE;
+        --ink: #2A2117;
+        --ink-soft: #5A4D3B;
+        --rule: rgba(42, 33, 23, 0.22);
+        --terracotta: #A6582C;
+      }
+
+      @page {
+        size: var(--widthIn) var(--heightIn);
+        margin: 0;
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: 'EB Garamond', Georgia, serif;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+      }
+
+      .cover-spread {
+        width: var(--widthIn);
+        height: var(--heightIn);
+        position: relative;
+        background:
+          radial-gradient(ellipse at top left, rgba(166, 88, 44, 0.05), transparent 60%),
+          radial-gradient(ellipse at bottom right, rgba(92, 110, 71, 0.05), transparent 65%),
+          var(--paper);
+        display: grid;
+        grid-template-columns:
+          calc((100% - var(--spineIn)) / 2)
+          var(--spineIn)
+          calc((100% - var(--spineIn)) / 2);
+        overflow: hidden;
+      }
+
+      .panel {
+        padding: calc(var(--bleedIn) + 0.45in) calc(var(--bleedIn) + 0.4in) calc(var(--bleedIn) + 0.45in);
+        position: relative;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .panel.back { border-right: 1px dashed rgba(0,0,0,0.06); }
+      .panel.front { border-left: 1px dashed rgba(0,0,0,0.06); }
+
+      /* ---- BACK ----------------------------------------------- */
+      .back .imprint-mark {
+        font-family: 'Inter', sans-serif;
+        font-size: 8pt;
+        text-transform: uppercase;
+        letter-spacing: 0.22em;
+        color: var(--ink-soft);
+        margin-bottom: 1.2em;
+      }
+      .back .blurb-wrap {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        max-width: 30em;
+      }
+      .back blockquote {
+        font-family: 'Cormorant Garamond', serif;
+        font-style: italic;
+        font-size: 16pt;
+        line-height: 1.3;
+        margin: 0 0 0.9em;
+        color: var(--ink);
+      }
+      .back blockquote::before { content: '\201C'; color: var(--terracotta); margin-right: 0.06em; }
+      .back blockquote::after { content: '\201D'; color: var(--terracotta); margin-left: 0.04em; }
+      .back .lede {
+        font-size: 10.5pt;
+        line-height: 1.5;
+        color: var(--ink-soft);
+        margin: 0 0 0.7em;
+      }
+      .back .featuring {
+        font-family: 'Inter', sans-serif;
+        font-size: 7.5pt;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+        margin: 1.5em 0 0.4em;
+      }
+      .back .voices {
+        font-family: 'EB Garamond', serif;
+        font-size: 10pt;
+        font-style: italic;
+        color: var(--ink);
+        line-height: 1.5;
+      }
+      .back .footer-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        margin-top: 1em;
+      }
+      .back .barcode-area {
+        width: 2in;
+        height: 1.2in;
+        background: rgba(255,255,255,0.6);
+        border: 1px dashed var(--rule);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: 'Inter', sans-serif;
+        font-size: 7pt;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+        color: var(--ink-soft);
+      }
+      .back .imprint-tail {
+        text-align: right;
+        font-family: 'Inter', sans-serif;
+        font-size: 7.5pt;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+        line-height: 1.7;
+      }
+
+      /* ---- SPINE --------------------------------------------- */
+      .spine {
+        background: var(--paper-deep);
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: space-between;
+        padding: calc(var(--bleedIn) + 0.18in) 0;
+      }
+      .spine .spine-text {
+        writing-mode: vertical-rl;
+        text-orientation: mixed;
+        transform: rotate(180deg);
+        font-family: 'Cormorant Garamond', serif;
+        font-weight: 500;
+        font-size: 14pt;
+        letter-spacing: 0.04em;
+        color: var(--ink);
+        white-space: nowrap;
+      }
+      .spine .spine-text em {
+        font-style: italic;
+        color: var(--terracotta);
+        font-weight: 400;
+      }
+      .spine .spine-imprint {
+        font-family: 'Inter', sans-serif;
+        font-size: 6.5pt;
+        letter-spacing: 0.32em;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+        writing-mode: vertical-rl;
+        transform: rotate(180deg);
+      }
+
+      /* ---- FRONT --------------------------------------------- */
+      .front {
+        text-align: center;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .front .top-mark {
+        font-family: 'Inter', sans-serif;
+        font-size: 8pt;
+        letter-spacing: 0.32em;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+      }
+      .front .ornament-wrap {
+        margin: 1.2em auto 0.8em;
+        display: flex;
+        justify-content: center;
+        color: var(--terracotta);
+      }
+      .front h1 {
+        font-family: 'Cormorant Garamond', serif;
+        font-weight: 500;
+        font-size: 86pt;
+        line-height: 0.95;
+        letter-spacing: -0.01em;
+        margin: 0.1em 0 0;
+        color: var(--ink);
+      }
+      .front .annual-mark {
+        font-family: 'Cormorant Garamond', serif;
+        font-style: italic;
+        font-weight: 400;
+        font-size: 38pt;
+        margin: 0.25em 0 0;
+        color: var(--ink-soft);
+      }
+      .front .ornament-rule {
+        margin: 1.6em auto 1.2em;
+        height: 1px;
+        width: 38%;
+        background: linear-gradient(to right, transparent, var(--rule), transparent);
+      }
+      .front .year-stamp {
+        font-family: 'Cormorant Garamond', serif;
+        font-style: italic;
+        font-weight: 400;
+        font-size: 64pt;
+        color: var(--terracotta);
+        line-height: 1;
+        margin: 0;
+      }
+      .front .subtitle {
+        font-family: 'Cormorant Garamond', serif;
+        font-style: italic;
+        font-weight: 400;
+        font-size: 14pt;
+        line-height: 1.4;
+        color: var(--ink-soft);
+        max-width: 22em;
+        margin: 1.4em auto 0;
+      }
+      .front .editor-mark {
+        font-family: 'Inter', sans-serif;
+        font-size: 9pt;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+      }
+
+      /* ---- On-screen affordances --------------------------- */
+      @media screen {
+        body {
+          background: linear-gradient(to bottom, #cfc6af, #cfc6af 1in, #1d1810 1in, #1d1810);
+          padding: 1in 0;
+        }
+        .toolbar {
+          position: sticky;
+          top: 0;
+          background: rgba(207, 198, 175, 0.95);
+          backdrop-filter: blur(8px);
+          font-family: 'Inter', sans-serif;
+          font-size: 0.78rem;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--ink-soft);
+          padding: 0.6em 1em;
+          text-align: center;
+          z-index: 10;
+          margin: -1in 0 1in;
+        }
+        .toolbar code { font-family: ui-monospace, monospace; background: rgba(255,255,255,0.6); padding: 0.1em 0.4em; border-radius: 2px; color: var(--ink); }
+        .cover-spread {
+          margin: 0 auto;
+          box-shadow: 0 12px 60px rgba(0, 0, 0, 0.5);
+        }
+      }
+      @media print {
+        body { background: var(--paper); padding: 0; }
+        .toolbar { display: none; }
+        .cover-spread { box-shadow: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar">
+      Cover spread for {Y}. Print → Custom paper size <code>{WIDTH_INCHES.toFixed(3)}" × {HEIGHT_INCHES.toFixed(3)}"</code> · margins None · backgrounds ON · save as <code>public/annual/{Y}/cover.pdf</code>
+    </div>
+
+    <div class="cover-spread">
+      <!-- BACK COVER -->
+      <div class="panel back">
+        <div class="imprint-mark">Rizoma Field School · {site.title}</div>
+        <div class="blurb-wrap">
+          <blockquote>How do we live well in the age of the Machine?</blockquote>
+          <p class="lede">
+            For five years, Doomer Optimism has gathered farmers, builders, repairers, scholars,
+            and parents who refuse both techno-utopian denial and apocalyptic exit. This
+            volume is the year's harvest: companion essays from the show's conversations,
+            summaries of every {Y} episode, and a categorised reading list of every book,
+            paper, and resource the year called upon.
+          </p>
+          <p class="lede">
+            Clear-eyed about systemic fragility. Rooted in the practical work of <em>bread and roses</em>.
+            Set in EB Garamond and Cormorant Garamond. Bound to last; meant to be read slowly.
+          </p>
+
+          {contributors.length > 0 && (
+            <>
+              <p class="featuring">Featuring conversations with</p>
+              <p class="voices">{contributors.join(' · ')}</p>
+            </>
+          )}
+        </div>
+
+        <div class="footer-row">
+          <div class="barcode-area">
+            ISBN / barcode<br/>(Lulu inserts)
+          </div>
+          <div class="imprint-tail">
+            Rizoma Field School<br/>
+            doomeroptimism.com<br/>
+            <span style="opacity: 0.7;">Vol. {Y - 2025} · {Y}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SPINE -->
+      <div class="panel spine">
+        <span class="spine-imprint">Rizoma</span>
+        <span class="spine-text">Doomer Optimism Annual <em>· {Y}</em></span>
+        <span class="spine-imprint">{Y}</span>
+      </div>
+
+      <!-- FRONT COVER -->
+      <div class="panel front">
+        <div class="top-mark">Volume {Y - 2025} · {Y}</div>
+
+        <div>
+          <div class="ornament-wrap">
+            <Ornament size={56} />
+          </div>
+          <h1>Doomer<br/>Optimism</h1>
+          <div class="annual-mark">— the Annual —</div>
+
+          <div class="ornament-rule"></div>
+
+          <div class="year-stamp">{Y}</div>
+
+          <p class="subtitle">A year in essays, conversations, and citations from {site.title}.</p>
+        </div>
+
+        <div class="editor-mark">Edited by {site.host}</div>
+      </div>
+    </div>
+  </body>
+</html>
