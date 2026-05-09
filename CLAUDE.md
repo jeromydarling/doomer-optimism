@@ -72,8 +72,33 @@ The schema is RSS-ready. When the real Doomer Optimism feed URL is in hand, add 
 - Bibliography entries take an optional `isbn` field. When present, books render as Bookshop affiliate links; otherwise they fall back to any explicit `href`, or plain italic text.
 - Component: `src/components/BibliographyLink.astro` — used by the episode detail page, library page, and the Annual.
 
-## CMS layer (future)
-Static content collections support adding a Git-based admin UI later (Decap CMS / Sveltia CMS) so guest writers can author companion essays without touching the repo. The static deploy stays unchanged — the CMS commits markdown back to this same tree.
+## Claude-as-CMS (the actual model)
+
+There is no admin UI. **Ashley is not a developer and will not open
+GitHub.** She talks to Claude Code on the web and Claude does
+everything: editing MDX, committing, triggering CI, pulling release
+artifacts back, and delivering files via the Gmail MCP if needed.
+
+When Claude picks up a task in a future session, the heuristic is:
+- Is the human writing in plain English about something they want
+  done (a new article, a promo, an event, an email blast)? → Don't
+  send them to GitHub. Just do it.
+- Is the human writing technical/dev requests? → That's me (Jeromy)
+  setting up infrastructure. Treat as code review.
+
+Concretely, the patterns Claude should drive end-to-end:
+- **New article** — write the MDX under `src/content/articles/`,
+  commit, push to main; Pages auto-deploys.
+- **New episode (manual)** — only if the auto-watcher missed it.
+  Same pattern.
+- **Promo video** — edit `promo/index.html`, commit, push; the
+  render workflow auto-fires; poll `latest-promo` release for the
+  MP4; deliver the URL.
+- **Event creation** — write the MDX under `src/content/events/`,
+  commit, push.
+- **Attendee email blast** *(once Stripe + Gmail are wired)* —
+  query Stripe for the event's customers, draft the email, send
+  via Gmail MCP after she approves.
 
 ## Don't
 - Don't add backwards-compatibility shims. We're pre-launch; just change the code.

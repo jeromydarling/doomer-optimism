@@ -4,59 +4,58 @@ A short, contemplative promo built on [HyperFrames](https://hyperframes.heygen.c
 Renders an HTML composition (60 s) to MP4 via Puppeteer + FFmpeg, headless and
 deterministic.
 
+## Audience for this README
+
+This file is written for **Claude in a future session**, not for Ashley.
+Ashley does not edit `index.html`. Ashley does not click "Run workflow."
+Ashley does not download from GitHub releases. Ashley says, in chat,
+something like *"build me a promo for the new Marcin Jakubowski episode"*
+and the rest is Claude's job. Treat this README as a runbook.
+
 ## Concept
 
 The Angelus by Jean-François Millet (1857–1859) provides a slow Ken-Burns
-backdrop — peasants pausing in evening prayer in a wheat field, the iconic
-agrarian-Catholic tableau. Bach's *Sheep May Safely Graze* plays
-underneath. Cormorant Garamond display type fades through the show's
-wordmark, central question, lede, six pillars, the "300 episodes"
-milestone, and a closing URL card.
+backdrop — peasants pausing in evening prayer in a wheat field. Bach's
+*Sheep May Safely Graze* plays underneath. Cormorant Garamond display
+type fades through the show's wordmark, central question, lede, six
+pillars, the "300 episodes" milestone, and a closing URL card.
 
-## How to render
+## How Claude renders a promo on Ashley's behalf
 
-**Default (CI):** trigger
-[`.github/workflows/render-promo.yml`](../.github/workflows/render-promo.yml) —
-the runner installs FFmpeg + Puppeteer, fetches the painting + music
-fresh, renders the MP4, and publishes it two ways:
+1. **Edit `index.html`** — change beat copy (lede, pillars, milestone,
+   sign-off) to match what she asked for. Each beat is commented and
+   has `data-start` / `data-duration` / `data-track-index` attributes.
+   If beat timings change, also adjust the GSAP timeline at the bottom
+   of the file — the runtime won't auto-sync.
+2. **Push to `main`.** The workflow `.github/workflows/render-promo.yml`
+   auto-fires on any change inside `promo/` (path filter). No
+   workflow_dispatch click needed.
+3. **Wait ~5 minutes.** Poll
+   `https://api.github.com/repos/jeromydarling/doomer-optimism/releases/tags/latest-promo`
+   until it 200s.
+4. **Grab the stable download URL.** Always:
+   `https://github.com/jeromydarling/doomer-optimism/releases/download/latest-promo/<filename>.mp4`
+5. **Deliver to Ashley.** Either drop the link in chat, or send via
+   the Gmail MCP if she wants it emailed.
 
-- as a **workflow artifact** (Actions tab → run → "promo-N" download)
-- as the binary attached to a rolling **`latest-promo`** GitHub release —
-  so the URL stays stable and Ashley can grab it from anywhere
+She uploads the MP4 to YouTube / Instagram / X herself, or asks Claude
+to do that too once we wire those MCPs in.
 
-This also fires automatically when anything inside `promo/` changes on
-`main`, so every edit to the composition produces a fresh render with no
-hands-on time.
+## Iterating quickly (rare; only when fine-tuning timing)
 
-**Locally** (only if you want to iterate quickly with the in-browser
-preview):
+If the in-CI render loop is too slow for tight iteration, the local
+preview is still available:
 
 ```bash
 cd promo
-./fetch-assets.sh
-npm run dev      # live-reload preview in the browser
-npm run check    # lint + validate + inspect
-npm run render   # produces an MP4 in this directory
+./fetch-assets.sh    # painting + music
+npm run dev          # live-reload preview in the browser
 ```
 
-`fetch-assets.sh` pulls the painting from Wikimedia Commons and the music
-from archive.org's Musopen mirror. Both are public domain. If either URL
-goes 403 on your network, drop in any equivalent file at
-`assets/angelus.jpg` and `assets/music.mp3` — the composition picks them
-up unchanged.
+Don't ship a local render — let CI do the canonical build so the
+output is reproducible and the release tag stays in sync with `main`.
 
-## Editing
-
-Open `index.html`. Six numbered "beats" are commented. Each is a
-`class="clip"` element with `data-start`, `data-duration`, and
-`data-track-index`. The GSAP timeline at the bottom of the file animates
-them on a paused, deterministic schedule that HyperFrames seeks through
-frame by frame.
-
-If you change beat timings, also adjust the GSAP calls — the runtime
-won't auto-sync them.
-
-## Notes
+## Composition rules (HyperFrames specifics)
 
 - All timed elements need `class="clip"` — the framework uses it for
   visibility lifecycle.
@@ -64,6 +63,14 @@ won't auto-sync them.
   `window.__timelines["root"]` — never call `.play()`.
 - No `Date.now()`, no `Math.random()`, no `fetch()` in the composition —
   rendering must be deterministic.
-- Binary assets (painting, music, rendered MP4s) are gitignored. Source
-  composition lives in the repo; rendered output lives in CI artifacts +
-  the `latest-promo` release.
+- Binary assets (painting, music, MP4 output) are gitignored. Only the
+  HTML composition lives in the repo; rendered MP4s live as release
+  assets.
+
+## Files
+
+- `index.html` — root composition, six numbered beats
+- `fetch-assets.sh` — pulls public-domain Angelus + BWV 208 recording
+- `package.json` — `npm run dev / check / render` shortcuts
+- `hyperframes.json`, `meta.json` — framework config
+- `assets/` — gitignored; populated by `fetch-assets.sh`
