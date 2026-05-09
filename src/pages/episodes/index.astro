@@ -1,22 +1,33 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { site } from '../../lib/site';
+import { withBase, site } from '../../lib/site';
 
-// One playlist, every episode. Drives the "Browse on YouTube" CTA and
-// the YouTube subscribe pill. We deliberately don't embed an iframe
-// (YouTube's embed only shows one video at a time; the playlist queue
-// is buried behind a player control). Cleaner to send people to the
-// playlist itself.
 const playlistId = site.social.youtubePlaylistId;
 const watchUrl = `https://www.youtube.com/playlist?list=${playlistId}`;
 
-// Subscribe destinations, in display order. `kind` drives the icon.
 const subscribeLinks: Array<{ label: string; href: string; kind: 'youtube' | 'spotify' | 'apple' | 'substack' | 'rss' }> = [
   { label: 'YouTube',       href: watchUrl,             kind: 'youtube' },
   { label: 'Spotify',       href: site.social.spotify,  kind: 'spotify' },
   { label: 'Apple Podcasts', href: site.social.apple,    kind: 'apple' },
   { label: 'Substack',      href: site.social.substack, kind: 'substack' },
   { label: 'RSS',           href: site.social.rss,      kind: 'rss' },
+];
+
+// Suggested keywords. Mix of pillars + recurring authors/topics that
+// are worth ~one click of discovery. Edit freely as the show's voice
+// evolves; the search itself works for anything in the index.
+const suggestedQueries = [
+  'regenerative agriculture',
+  'right to repair',
+  'Wendell Berry',
+  'Paul Kingsnorth',
+  'Ivan Illich',
+  'permaculture',
+  'distributism',
+  'AI risk',
+  'localism',
+  'tech-limited childhood',
+  'Catholic Social Teaching',
 ];
 ---
 
@@ -71,12 +82,183 @@ const subscribeLinks: Array<{ label: string; href: string; kind: 'youtube' | 'sp
   </div>
 
   {/*
-    Browse-on-YouTube CTA. We deliberately don't embed a single-video
-    iframe here — YouTube's embed only shows one video at a time, and
-    burying the playlist queue behind a player control is worse UX
-    than a clean "go see them all on YouTube" door.
+    Search section. Pagefind indexes every episode body
+    (data-pagefind-body in [...slug].astro), so this hits transcripts,
+    summaries, bibliographies, chapters, all of it. Suggested-query
+    chips are static — clicking one fills the input + triggers a
+    search. Results render below; the whole thing collapses back to
+    the suggestion chips when the input is cleared.
   */}
-  <section class="container-wide py-16 md:py-24 text-center">
+  <section class="container-wide pt-12 md:pt-16 pb-8" data-search-root>
+    <div class="rule-ornament mb-6">
+      <span class="smallcaps">Search the archive</span>
+    </div>
+    <div class="search-shell">
+      <svg class="search-icon" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="1.7"/>
+        <path d="M15.5 15.5L20 20" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+      </svg>
+      <input
+        id="archive-search"
+        type="search"
+        autocomplete="off"
+        placeholder="Search guests, books, topics, transcripts…"
+        class="search-input"
+        aria-label="Search the archive"
+        data-search-input
+      />
+      <button type="button" class="search-clear" aria-label="Clear search" data-search-clear hidden>
+        <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+          <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="suggested" data-suggested>
+      <p class="smallcaps mb-3">Try a thread</p>
+      <ul class="suggested-list">
+        {suggestedQueries.map((q) => (
+          <li>
+            <button type="button" class="suggested-pill" data-suggested-query={q}>
+              {q}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+
+    <div class="search-results" data-search-results aria-live="polite" hidden></div>
+  </section>
+
+  {/* Pagefind UI bundle — we use the JS API directly for a custom UI. */}
+  <script
+    is:inline
+    define:vars={{ basePath: withBase('/pagefind/') }}
+  >
+    (async () => {
+      const root = document.querySelector('[data-search-root]');
+      if (!root) return;
+      const input = root.querySelector('[data-search-input]');
+      const clearBtn = root.querySelector('[data-search-clear]');
+      const results = root.querySelector('[data-search-results]');
+      const suggested = root.querySelector('[data-suggested]');
+
+      let pagefind;
+      try {
+        pagefind = await import(/* @vite-ignore */ basePath + 'pagefind.js');
+        await pagefind.init();
+      } catch (err) {
+        // Pagefind only ships with production builds; in `npm run dev`
+        // the bundle isn't there. Show a friendly note instead of an
+        // error.
+        results.removeAttribute('hidden');
+        results.innerHTML = '<p class="smallcaps">Search index ships with the production deploy. Try the suggested threads above for now.</p>';
+        suggested.style.opacity = '0.6';
+        return;
+      }
+
+      const renderEmpty = () => {
+        results.setAttribute('hidden', '');
+        results.innerHTML = '';
+        suggested.removeAttribute('hidden');
+        clearBtn.setAttribute('hidden', '');
+      };
+
+      const renderLoading = () => {
+        suggested.setAttribute('hidden', '');
+        results.removeAttribute('hidden');
+        results.innerHTML = '<p class="smallcaps text-center py-10">Searching…</p>';
+      };
+
+      const renderResults = async (query, found) => {
+        suggested.setAttribute('hidden', '');
+        results.removeAttribute('hidden');
+        clearBtn.removeAttribute('hidden');
+        if (!found.results.length) {
+          results.innerHTML = `
+            <p class="smallcaps mb-2">No matches</p>
+            <p class="font-serif text-lg text-umber-100">
+              Nothing in the archive for <em>${escapeHtml(query)}</em> yet.
+              Try one of the suggested threads above, or browse the full
+              playlist on YouTube.
+            </p>`;
+          return;
+        }
+        const top = await Promise.all(found.results.slice(0, 12).map((r) => r.data()));
+        results.innerHTML = `
+          <p class="smallcaps mb-4">
+            ${found.results.length} result${found.results.length === 1 ? '' : 's'} for <em>${escapeHtml(query)}</em>
+          </p>
+          <ul class="search-list">
+            ${top.map((r) => {
+              const num = r.meta?.number ? `Episode ${escapeHtml(r.meta.number)}` : '';
+              const guest = r.meta?.guest ? escapeHtml(r.meta.guest) : '';
+              const pillar = r.meta?.pillar ? escapeHtml(r.meta.pillar) : '';
+              const meta = [num, guest, pillar].filter(Boolean).join(' · ');
+              return `
+                <li class="search-item">
+                  <a href="${r.url}" class="!border-b-0 block">
+                    ${meta ? `<p class="smallcaps !text-[0.62rem] !text-umber-200 mb-1">${meta}</p>` : ''}
+                    <h3 class="font-display text-2xl text-umber-300 mb-2 hover:!text-terracotta-500">
+                      ${escapeHtml(r.meta?.title ?? r.url)}
+                    </h3>
+                    <p class="font-serif text-base text-umber-100 leading-relaxed">${r.excerpt}</p>
+                  </a>
+                </li>
+              `;
+            }).join('')}
+          </ul>`;
+      };
+
+      const escapeHtml = (s) =>
+        String(s ?? '')
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+      let pending = 0;
+      const runSearch = async (query) => {
+        const my = ++pending;
+        if (!query.trim()) { renderEmpty(); return; }
+        renderLoading();
+        const found = await pagefind.search(query);
+        if (my !== pending) return; // a newer query has already started
+        await renderResults(query, found);
+      };
+
+      let debounce;
+      input.addEventListener('input', () => {
+        clearTimeout(debounce);
+        const q = input.value;
+        clearBtn[q ? 'removeAttribute' : 'setAttribute']('hidden', '');
+        debounce = setTimeout(() => runSearch(q), 180);
+      });
+
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          input.value = '';
+          renderEmpty();
+        }
+      });
+
+      clearBtn.addEventListener('click', () => {
+        input.value = '';
+        renderEmpty();
+        input.focus();
+      });
+
+      // Suggested chips: fill the input and run the search.
+      root.querySelectorAll('[data-suggested-query]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const q = btn.getAttribute('data-suggested-query') ?? '';
+          input.value = q;
+          input.focus();
+          runSearch(q);
+        });
+      });
+    })();
+  </script>
+
+  <section class="container-wide py-16 md:py-24 text-center border-t border-umber-300/15">
     <p class="smallcaps !text-umber-200 mb-4">Watch the archive</p>
     <h2 class="!text-3xl md:!text-5xl mb-4 max-w-3xl mx-auto leading-tight">
       Every conversation, on the YouTube playlist.
@@ -143,4 +325,116 @@ const subscribeLinks: Array<{ label: string; href: string; kind: 'youtube' | 'sp
   .subscribe-pill[data-kind="apple"]     .subscribe-pill-icon { color: #b85a99; }
   .subscribe-pill[data-kind="substack"]  .subscribe-pill-icon { color: #ff6719; }
   .subscribe-pill[data-kind="rss"]       .subscribe-pill-icon { color: #f26522; }
+
+  /* ------- Search -------- */
+
+  .search-shell {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: rgba(244, 236, 219, 0.65);
+    border: 1px solid rgba(60, 45, 30, 0.18);
+    transition: border-color 160ms ease, background 160ms ease;
+  }
+  .search-shell:focus-within {
+    border-color: rgba(216, 112, 74, 0.7);
+    background: rgba(244, 236, 219, 0.95);
+  }
+  .search-icon {
+    position: absolute;
+    left: 1.1rem;
+    color: rgba(60, 45, 30, 0.55);
+    pointer-events: none;
+  }
+  .search-input {
+    width: 100%;
+    background: transparent;
+    border: 0;
+    outline: 0;
+    padding: 1.1rem 3rem 1.1rem 3.2rem;
+    font-family: 'Cormorant Garamond', Garamond, serif;
+    font-size: clamp(1.25rem, 2vw, 1.65rem);
+    color: var(--ink, #2a2117);
+    line-height: 1.2;
+  }
+  .search-input::placeholder {
+    color: rgba(60, 45, 30, 0.42);
+    font-style: italic;
+  }
+  /* Hide the native clear/close button on -webkit search inputs so we can
+     drive our own. */
+  .search-input::-webkit-search-cancel-button,
+  .search-input::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }
+
+  .search-clear {
+    position: absolute;
+    right: 0.65rem;
+    width: 2.2rem;
+    height: 2.2rem;
+    border: 0;
+    background: transparent;
+    color: rgba(60, 45, 30, 0.6);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0;
+  }
+  .search-clear:hover,
+  .search-clear:focus-visible {
+    color: var(--terracotta, #b85a3a);
+    outline: none;
+  }
+  .search-clear[hidden] { display: none; }
+
+  .suggested {
+    margin-top: 1.4rem;
+  }
+  .suggested-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .suggested-pill {
+    appearance: none;
+    background: transparent;
+    border: 1px solid rgba(60, 45, 30, 0.22);
+    color: #3c2d1e;
+    font-family: 'EB Garamond', Garamond, serif;
+    font-size: 0.95rem;
+    font-style: italic;
+    padding: 0.45rem 0.85rem;
+    cursor: pointer;
+    transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
+  }
+  .suggested-pill:hover,
+  .suggested-pill:focus-visible {
+    border-color: rgba(216, 112, 74, 0.7);
+    color: #b85a3a;
+    background: rgba(244, 236, 219, 0.85);
+    outline: none;
+  }
+
+  .search-results { margin-top: 2rem; }
+  .search-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 1.5rem;
+  }
+  .search-item {
+    padding: 1.25rem 0;
+    border-bottom: 1px solid rgba(60, 45, 30, 0.12);
+  }
+  .search-item:last-child { border-bottom: 0; }
+  /* Pagefind wraps query matches in <mark>. Style them in the show palette. */
+  .search-results :global(mark) {
+    background: rgba(216, 112, 74, 0.15);
+    color: var(--terracotta, #b85a3a);
+    padding: 0 0.1em;
+  }
 </style>
