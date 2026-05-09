@@ -8,31 +8,32 @@
  *      book/paper bibliography, suggested pillar, summary in the show's voice,
  *      and pull quotes.
  *
- * Audio source: yt-dlp against the YouTube channel.
- * Output: idempotent MDX writes into src/content/episodes/, preserving any
- * hand-curated frontmatter when an episode file already exists.
+ * Audio source: the Anchor / Spotify-for-Creators podcast RSS feed
+ * (https://anchor.fm/s/68308b7c/podcast/rss). Direct enclosure downloads —
+ * no yt-dlp, no YouTube bot walls.
  *
- * Caches per-video JSON in .transcripts/ so reruns skip done work.
+ * Output: idempotent MDX writes into src/content/episodes/, preserving any
+ * hand-curated frontmatter when an episode file already exists. Caches per-
+ * episode audio + transcript JSON in .transcripts/ so reruns skip done work.
  *
  * Usage:
  *   ELEVENLABS_API_KEY=... ANTHROPIC_API_KEY=... \
  *     node scripts/transcribe-backfill.mjs \
- *       --channel "https://www.youtube.com/@doomeroptimism" \
- *       --max 300 \
- *       [--dry-run] [--only=<videoId>]
+ *       --feed "https://anchor.fm/s/68308b7c/podcast/rss" \
+ *       --max 500 \
+ *       [--dry-run] [--only=<guid-or-slug>]
  */
 
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { readFile, writeFile, readdir, mkdir } from 'node:fs/promises';
+import { existsSync, createWriteStream } from 'node:fs';
 import { join, basename } from 'node:path';
 import { Blob } from 'node:buffer';
-
-const exec = promisify(execFile);
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import { createHash } from 'node:crypto';
 
 const args = parseArgs(process.argv.slice(2));
-const CHANNEL = args.channel ?? 'https://www.youtube.com/@doomeroptimism';
+const FEED = args.feed ?? 'https://anchor.fm/s/68308b7c/podcast/rss';
 const MAX = Number(args.max ?? 500);
 const DRY = !!args['dry-run'];
 const ONLY = args.only ?? null;
@@ -55,30 +56,22 @@ await mkdir(CACHE_DIR, { recursive: true });
 await mkdir(AUDIO_DIR, { recursive: true });
 await mkdir(ENRICH_DIR, { recursive: true });
 
-// ---- 1. enumerate channel ----
-log('▶ Enumerating channel:', CHANNEL);
-const listJson = await ytdlp([
-  '--flat-playlist',
-  '--dump-json',
-  '--playlist-end', String(MAX),
-  CHANNEL,
-]);
-const videos = listJson
-  .split('\n')
-  .filter(Boolean)
-  .map((line) => JSON.parse(line))
-  .filter((v) => !ONLY || v.id === ONLY);
-log(`  Found ${videos.length} videos.`);
+// ---- 1. fetch + parse RSS ------------------------------------------------------
+log('▶ Fetching feed:', FEED);
+const feedXml = await (await fetch(FEED)).text();
+const items = parseRss(feedXml).filter((it) => !ONLY || it.guid === ONLY || makeSlug(it.title) === ONLY);
+const slice = items.slice(0, MAX);
+log(`  Found ${items.length} episodes in feed; processing ${slice.length}.`);
 
 const existing = await loadExistingEpisodes();
 
 const results = [];
-for (const v of videos) {
+for (const it of slice) {
   try {
-    results.push(await processVideo(v));
+    results.push(await processEpisode(it));
   } catch (err) {
-    log(`  ✖ ${v.id}: ${err.message}`);
-    results.push({ id: v.id, title: v.title, error: err.message });
+    log(`  ✖ ${it.guid}: ${err.message}`);
+    results.push({ guid: it.guid, title: it.title, error: err.message });
   }
 }
 
@@ -88,41 +81,38 @@ log('');
 log(`Done. ${ok.length} processed, ${failed.length} failed.`);
 if (failed.length) {
   log('Failures:');
-  failed.forEach((r) => log(`  ${r.id}  ${r.title}  →  ${r.error}`));
+  failed.forEach((r) => log(`  ${r.guid}  ${r.title}  →  ${r.error}`));
 }
 
 // =================================================================================
 
-async function processVideo(v) {
-  const number = extractEpisodeNumber(v.title);
-  const slug = makeSlug(v.title);
-  const baseName = number != null ? `${number}-${slug}` : `unnumbered-${v.id}-${slug}`;
+async function processEpisode(it) {
+  const number = it.episodeNumber ?? extractEpisodeNumber(it.title);
+  const slug = makeSlug(it.title);
+  const baseName = number != null ? `${number}-${slug}` : `unnumbered-${shortHash(it.guid)}-${slug}`;
   const outMdxPath = join(EPISODES_DIR, `${baseName}.mdx`);
 
   log('');
-  log(`▶ ${v.id}  ${v.title}`);
+  log(`▶ ${baseName}  ${it.title}`);
 
   if (DRY) {
+    log(`  (dry) audio: ${it.audioUrl}`);
     log(`  (dry) would write → ${outMdxPath}`);
-    return { id: v.id, title: v.title, slug: baseName, dry: true };
+    return { guid: it.guid, title: it.title, slug: baseName, dry: true };
   }
 
-  // 1a. Download audio (cached)
-  const audioPath = join(AUDIO_DIR, `${v.id}.m4a`);
+  // 1a. Download audio (cached). Anchor enclosure URLs are public.
+  const audioExt = inferAudioExt(it.audioUrl);
+  const audioPath = join(AUDIO_DIR, `${shortHash(it.guid)}.${audioExt}`);
   if (!existsSync(audioPath)) {
     log('  • downloading audio…');
-    await ytdlp([
-      '-f', 'bestaudio[ext=m4a]/bestaudio',
-      '--no-playlist',
-      '-o', audioPath,
-      `https://www.youtube.com/watch?v=${v.id}`,
-    ]);
+    await downloadFile(it.audioUrl, audioPath);
   } else {
     log('  • audio cached');
   }
 
-  // 1b. ElevenLabs Scribe transcript (cached)
-  const txPath = join(CACHE_DIR, `${v.id}.scribe.json`);
+  // 1b. ElevenLabs Scribe (cached)
+  const txPath = join(CACHE_DIR, `${shortHash(it.guid)}.scribe.json`);
   let scribe;
   if (existsSync(txPath)) {
     scribe = JSON.parse(await readFile(txPath, 'utf8'));
@@ -134,27 +124,27 @@ async function processVideo(v) {
   }
 
   const utterances = wordsToUtterances(scribe.words ?? []);
-  const guestFromTitle = extractGuestName(v.title);
+  const guestFromTitle = extractGuestName(it.title);
   const speakers = mapSpeakers(utterances, guestFromTitle);
   const transcriptText = utterances
     .map((u) => `${speakers[u.speaker] ?? `Speaker ${u.speaker}`} (${formatTimestamp(u.start)}): ${u.text}`)
     .join('\n\n');
 
   // 2. Haiku enrichment (cached)
-  const enrichPath = join(ENRICH_DIR, `${v.id}.json`);
+  const enrichPath = join(ENRICH_DIR, `${shortHash(it.guid)}.json`);
   let enriched;
   if (existsSync(enrichPath)) {
     enriched = JSON.parse(await readFile(enrichPath, 'utf8'));
     log('  • enrichment cached');
   } else {
     log('  • enriching with Claude Haiku…');
-    enriched = await enrichWithHaiku({ title: v.title, guest: speakers['B'] ?? guestFromTitle, transcriptText });
+    enriched = await enrichWithHaiku({ title: it.title, guest: speakers['B'] ?? guestFromTitle, transcriptText });
     await writeFile(enrichPath, JSON.stringify(enriched, null, 2));
   }
 
   // 3. MDX
   const mdx = await buildMdx({
-    video: v,
+    item: it,
     number,
     slug,
     utterances,
@@ -165,14 +155,72 @@ async function processVideo(v) {
   await writeFile(outMdxPath, mdx);
   log(`  ✓ wrote ${outMdxPath}`);
 
-  return { id: v.id, title: v.title, number, path: outMdxPath };
+  return { guid: it.guid, title: it.title, number, path: outMdxPath };
+}
+
+// ---- RSS parsing ---------------------------------------------------------------
+function parseRss(xml) {
+  const items = [];
+  const itemRe = /<item>([\s\S]*?)<\/item>/g;
+  let m;
+  while ((m = itemRe.exec(xml))) {
+    const block = m[1];
+    const title = stripCdata(matchOne(block, /<title>([\s\S]*?)<\/title>/));
+    const pubDate = matchOne(block, /<pubDate>([\s\S]*?)<\/pubDate>/);
+    const guid = stripCdata(matchOne(block, /<guid[^>]*>([\s\S]*?)<\/guid>/));
+    const description = stripCdata(
+      matchOne(block, /<description>([\s\S]*?)<\/description>/) ||
+      matchOne(block, /<itunes:summary>([\s\S]*?)<\/itunes:summary>/),
+    );
+    const duration = matchOne(block, /<itunes:duration>([\s\S]*?)<\/itunes:duration>/);
+    const epStr = matchOne(block, /<itunes:episode>([\s\S]*?)<\/itunes:episode>/);
+    const enc = block.match(/<enclosure[^>]*url="([^"]+)"[^>]*\/?>/);
+    if (!enc) continue;
+    items.push({
+      guid: guid ?? enc[1],
+      title: (title ?? '').trim(),
+      pubDate,
+      description: description ?? '',
+      durationSeconds: parseDuration(duration),
+      episodeNumber: epStr ? Number(epStr) : null,
+      audioUrl: enc[1],
+    });
+  }
+  return items;
+}
+
+function matchOne(s, re) { const m = s.match(re); return m ? m[1] : null; }
+function stripCdata(s) { return s == null ? null : s.replace(/^\s*<!\[CDATA\[/, '').replace(/\]\]>\s*$/, '').trim(); }
+function parseDuration(d) {
+  if (!d) return 0;
+  const s = String(d).trim();
+  if (/^\d+$/.test(s)) return Number(s);
+  const parts = s.split(':').map(Number);
+  if (parts.some(isNaN)) return 0;
+  let total = 0;
+  for (const p of parts) total = total * 60 + p;
+  return total;
+}
+function inferAudioExt(url) {
+  const m = url.match(/\.(mp3|m4a|aac|wav|ogg)(?:\?|$)/i);
+  return m ? m[1].toLowerCase() : 'mp3';
+}
+function shortHash(s) { return createHash('sha1').update(String(s)).digest('hex').slice(0, 12); }
+
+// ---- Audio download ------------------------------------------------------------
+async function downloadFile(url, outPath) {
+  const res = await fetch(url, { redirect: 'follow' });
+  if (!res.ok) throw new Error(`download ${res.status}: ${url}`);
+  await pipeline(Readable.fromWeb(res.body), createWriteStream(outPath));
 }
 
 // ---- ElevenLabs Scribe ---------------------------------------------------------
 async function scribeTranscribe(audioPath) {
   const data = await readFile(audioPath);
+  const ext = audioPath.split('.').pop()?.toLowerCase() ?? 'mp3';
+  const mime = { mp3: 'audio/mpeg', m4a: 'audio/m4a', aac: 'audio/aac', wav: 'audio/wav', ogg: 'audio/ogg' }[ext] ?? 'audio/mpeg';
   const form = new FormData();
-  form.append('file', new Blob([data], { type: 'audio/m4a' }), basename(audioPath));
+  form.append('file', new Blob([data], { type: mime }), basename(audioPath));
   form.append('model_id', 'scribe_v1');
   form.append('diarize', 'true');
   form.append('timestamps_granularity', 'word');
@@ -196,19 +244,17 @@ function wordsToUtterances(words) {
     const text = w.text ?? '';
     if (!cur || cur.speaker !== speaker) {
       if (cur) utt.push(cur);
-      cur = { speaker: normalizeSpeakerLabel(speaker), text: text, start: (w.start ?? 0) * 1000, end: (w.end ?? 0) * 1000 };
+      cur = { speaker: normalizeSpeakerLabel(speaker), text, start: (w.start ?? 0) * 1000, end: (w.end ?? 0) * 1000 };
     } else {
       cur.text += (cur.text.endsWith(' ') ? '' : ' ') + text;
       cur.end = (w.end ?? cur.end) * 1000;
     }
   }
   if (cur) utt.push(cur);
-  // Glue tiny utterances back into neighbors (artifacts of single-word speaker flips)
   return utt.filter((u) => u.text.trim().length > 1);
 }
 
 function normalizeSpeakerLabel(id) {
-  // Scribe uses "speaker_0", "speaker_1" — convert to "A", "B", "C", …
   const m = String(id).match(/(\d+)$/);
   if (!m) return id;
   return String.fromCharCode(65 + Number(m[1]));
@@ -228,7 +274,6 @@ The site organizes around six content pillars (use these exact slugs):
 You receive a transcript with speaker labels and timestamps. You return a structured analysis via the provided tool. The summary must be written in the show's voice: clear-eyed about systemic fragility, hopeful about practical community-led work, never glib. Bibliography entries should only include works that are actually mentioned or clearly referenced in the transcript — never invent citations. Pull quotes should be verbatim and self-contained.`;
 
 async function enrichWithHaiku({ title, guest, transcriptText }) {
-  // Truncate very long transcripts to stay within context (Haiku 200k context, but cost grows)
   const MAX_CHARS = 240_000;
   const trimmed = transcriptText.length > MAX_CHARS
     ? transcriptText.slice(0, MAX_CHARS) + '\n\n[...transcript truncated for analysis...]'
@@ -288,7 +333,6 @@ async function enrichWithHaiku({ title, guest, transcriptText }) {
     model: HAIKU_MODEL,
     max_tokens: 4096,
     system: [
-      // Cache the show context — the same long preamble runs 300 times.
       { type: 'text', text: SHOW_CONTEXT, cache_control: { type: 'ephemeral' } },
     ],
     tools,
@@ -389,7 +433,7 @@ function mapSpeakers(utterances, guestName) {
   return map;
 }
 
-async function buildMdx({ video, number, slug, utterances, speakers, enriched, existingPath }) {
+async function buildMdx({ item, number, slug, utterances, speakers, enriched, existingPath }) {
   const transcriptBody = utterances
     .map((u) => {
       const ts = formatTimestamp(u.start);
@@ -418,14 +462,14 @@ async function buildMdx({ video, number, slug, utterances, speakers, enriched, e
   const guest = speakers['B'] ?? speakers['A'] ?? 'Unknown Guest';
   const fm = [
     `number: ${number ?? '# TODO'}`,
-    `title: ${yamlString(stripEpisodePrefix(video.title))}`,
+    `title: ${yamlString(stripEpisodePrefix(item.title))}`,
     `guest: ${yamlString(guest)}`,
-    `pubDate: ${formatDate(video.upload_date ?? video.timestamp ?? new Date())}`,
-    `durationSeconds: ${Math.round(video.duration ?? 0)}`,
+    `pubDate: ${formatDate(item.pubDate)}`,
+    `durationSeconds: ${item.durationSeconds || 0}`,
     `pillar: ${enriched.suggestedPillar ?? 'technology-ai-transhumanism # TODO: review'}`,
     enriched.secondaryPillar ? `secondaryPillar: ${enriched.secondaryPillar}` : null,
-    `summary: >-\n  ${escapeYamlMultiline(enriched.summary ?? video.title)}`,
-    `youtubeId: ${video.id}`,
+    `summary: >-\n  ${escapeYamlMultiline(enriched.summary ?? item.title)}`,
+    `audioUrl: ${yamlString(item.audioUrl)}`,
     `bibliography:`,
     ...(enriched.bibliography ?? []).map((b) =>
       `  - { title: ${yamlString(b.title)}${b.author ? `, author: ${yamlString(b.author)}` : ''}${b.year ? `, year: ${b.year}` : ''}, kind: ${b.kind} }`
@@ -447,10 +491,11 @@ function escapeYamlMultiline(s) {
   return String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, 800).replace(/\n/g, '\n  ');
 }
 function stripEpisodePrefix(t) { return t.replace(/^(?:DO|Episode|Ep\.?)\s*\d+\s*[—\-:|]\s*/i, '').trim(); }
-function formatDate(ymd) {
-  if (typeof ymd === 'string' && /^\d{8}$/.test(ymd)) return `${ymd.slice(0,4)}-${ymd.slice(4,6)}-${ymd.slice(6,8)}`;
-  if (typeof ymd === 'number') return new Date(ymd * 1000).toISOString().slice(0, 10);
-  return new Date(ymd).toISOString().slice(0, 10);
+function formatDate(rfc) {
+  if (!rfc) return new Date().toISOString().slice(0, 10);
+  const d = new Date(rfc);
+  if (isNaN(d.valueOf())) return new Date().toISOString().slice(0, 10);
+  return d.toISOString().slice(0, 10);
 }
 function formatTimestamp(ms) {
   const totalSec = Math.floor(ms / 1000);
@@ -460,9 +505,5 @@ function formatTimestamp(ms) {
   return h > 0
     ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
     : `${m}:${String(s).padStart(2, '0')}`;
-}
-async function ytdlp(args) {
-  const { stdout } = await exec('yt-dlp', args, { maxBuffer: 200 * 1024 * 1024 });
-  return stdout;
 }
 function log(...a) { console.log(...a); }

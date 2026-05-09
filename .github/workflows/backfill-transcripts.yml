@@ -3,20 +3,20 @@ name: Backfill transcripts
 on:
   workflow_dispatch:
     inputs:
-      channel:
-        description: 'YouTube channel URL'
+      feed:
+        description: 'Podcast RSS feed URL'
         required: false
-        default: 'https://www.youtube.com/@doomeroptimism'
+        default: 'https://anchor.fm/s/68308b7c/podcast/rss'
       max:
         description: 'Max episodes to process'
         required: false
-        default: '300'
+        default: '500'
       only:
-        description: 'Single video ID (overrides max). Leave blank for batch.'
+        description: 'Single episode guid or slug (overrides max). Leave blank for batch.'
         required: false
         default: ''
       dry_run:
-        description: 'List videos only — no downloads, no API calls'
+        description: 'List episodes only — no downloads, no API calls'
         required: false
         default: 'false'
         type: choice
@@ -45,14 +45,6 @@ jobs:
           node-version: 22
           cache: 'npm'
 
-      - name: Install yt-dlp + ffmpeg
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-          sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
-          sudo chmod +x /usr/local/bin/yt-dlp
-          yt-dlp --version
-
       - name: Install npm deps
         run: npm ci
 
@@ -70,9 +62,9 @@ jobs:
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          ARGS="--channel '${{ github.event.inputs.channel }}' --max ${{ github.event.inputs.max }}"
+          ARGS="--feed '${{ github.event.inputs.feed }}' --max ${{ github.event.inputs.max }}"
           if [ "${{ github.event.inputs.only }}" != "" ]; then
-            ARGS="$ARGS --only ${{ github.event.inputs.only }}"
+            ARGS="$ARGS --only '${{ github.event.inputs.only }}'"
           fi
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
             ARGS="$ARGS --dry-run"
@@ -99,7 +91,7 @@ jobs:
           body: |
             Auto-generated transcripts batch.
 
-            - Source: `${{ github.event.inputs.channel }}`
+            - Source: `${{ github.event.inputs.feed }}`
             - Max processed: `${{ github.event.inputs.max }}`
             - Engine: ElevenLabs Scribe (transcription + diarization) + Claude Haiku 4.5 (chapters, topics, bibliography, summary, pillar suggestion, pull quotes)
             - Speaker mapping: longest-talker → Ashley Colby Fitzgerald; second → guest from title
