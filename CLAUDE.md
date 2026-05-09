@@ -49,9 +49,16 @@ The schema is RSS-ready. When the real Doomer Optimism feed URL is in hand, add 
 - `scripts/transcribe-backfill.mjs` — pulls the Anchor RSS feed, transcribes via **ElevenLabs Scribe** (with diarization), then enriches each transcript via **Claude Haiku 4.5** (chapters, key topics, bibliography, suggested pillar, summary, pull quotes). Writes MDX preserving curated frontmatter.
 - `.github/workflows/backfill-transcripts.yml` — `workflow_dispatch` action that runs the backfill in CI and opens a PR with the results.
 - Requires `ELEVENLABS_API_KEY` and `ANTHROPIC_API_KEY` repo secrets.
-- Caches per-video JSON in `.transcripts/` and per-video enrichment in `.transcripts/enriched/` so reruns are cheap.
-- Speaker mapping: longest cumulative talker → host (Ashley); second-longest → guest extracted from title; rest are `Speaker C/D/...` for human review.
+- Caches per-video JSON in `.transcripts/` and per-video enrichment in `.transcripts/enriched/` so reruns are cheap. Caches live on the `claude/transcripts-backfill` PR branch (durable; not on main).
+- Speaker mapping: show-intro detection ("welcome to Doomer Optimism") to identify Ashley; longest non-host talker is the guest. Falls back to longest-talker = host if no intro pattern matches.
 - New episodes land with `draft: true` — review-then-publish flow.
+
+### Auto-watcher for new episodes
+- `.github/workflows/watch-new-episodes.yml` — cron-triggered (every 4 hours). Detects when a new episode appears in the Anchor RSS feed, runs the transcript pipeline for just that one episode (`--limit-new=1`), and opens/updates the same PR.
+- `scripts/detect-new-episode.mjs` — cheap probe; prints `new=true` when the most recent RSS item isn't yet cached in `.transcripts/`.
+- `scripts/match-youtube.mjs` — fetches the YouTube channel's RSS feed and fuzzy-matches by title to fill in `youtubeId` for any recent episode missing one. Idempotent; runs every cron tick so episodes whose YouTube upload lags the podcast still get matched eventually.
+  - Requires the **`YOUTUBE_CHANNEL_ID`** repo *variable* (not a secret) — find it by viewing source on the channel page and searching for `"channelId":"UC…"`. Without it, the matcher silently skips and only the transcript half runs.
+- Threshold for accepting a match is Jaccard ≥ 0.55 on title word tokens (after stripping show prefixes like "Doomer Optimism #N -"). Misses are logged for manual review rather than guessed.
 
 ## The Annual (Lulu print pipeline)
 - `src/pages/annual/[year].astro` — printable interior. Open in Chrome → Print → Save as PDF (6×9 in) → drop into `public/annual/{year}/interior.pdf`.
