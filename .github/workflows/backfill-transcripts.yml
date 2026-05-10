@@ -83,6 +83,41 @@ jobs:
           SCRIBE=$(ls .transcripts/*.scribe.json 2>/dev/null | wc -l | tr -d ' ')
           echo "Restored: $SCRIBE scribe.json files"
 
+      # Belt-and-suspenders: a background bash loop that fires every 60s
+      # in parallel with the script. If the in-script per-episode push
+      # ever silently fails (network blip, git-lock contention, anything),
+      # the watchdog catches and pushes within the next minute.
+      - name: Start background watchdog committer
+        run: |
+          cat > .watchdog.sh <<'EOF'
+          #!/bin/bash
+          BRANCH="claude/transcripts-backfill"
+          while true; do
+            sleep 60
+            git add .transcripts/ src/content/episodes/ 2>/dev/null
+            if ! git diff --cached --quiet 2>/dev/null; then
+              SCRIBE=$(ls .transcripts/*.scribe.json 2>/dev/null | wc -l | tr -d ' ')
+              git commit -m "Watchdog checkpoint ($SCRIBE scribe files) $(date -u +%H:%M:%S)" --quiet 2>/dev/null || continue
+              # Reconcile with any concurrent push from the script before our push.
+              git fetch origin "$BRANCH" --quiet 2>/dev/null || true
+              git rebase --autostash "origin/$BRANCH" --quiet 2>/dev/null || true
+              for attempt in 1 2 3; do
+                if git push origin "HEAD:$BRANCH" --quiet 2>/dev/null; then
+                  echo "[watchdog] pushed at $(date -u +%H:%M:%S) ($SCRIBE scribe files)"
+                  break
+                fi
+                git fetch origin "$BRANCH" --quiet 2>/dev/null || true
+                git rebase --autostash "origin/$BRANCH" --quiet 2>/dev/null || true
+                sleep $((attempt * 2))
+              done
+            fi
+          done
+          EOF
+          chmod +x .watchdog.sh
+          nohup ./.watchdog.sh > .watchdog.log 2>&1 &
+          echo $! > .watchdog.pid
+          echo "Started watchdog (pid $(cat .watchdog.pid)). It commits + pushes every 60s in parallel with the script."
+
       - name: Run backfill
         env:
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
@@ -104,6 +139,39 @@ jobs:
           fi
           echo "Running: node scripts/transcribe-backfill.mjs $ARGS"
           eval node scripts/transcribe-backfill.mjs $ARGS
+
+      # Stop the watchdog AND do a final synchronous commit+push of
+      # whatever's still uncommitted. Runs even on cancel/timeout so a
+      # 6h-cap kill still gets the last checkpoint out.
+      - name: Stop watchdog + final flush
+        if: always()
+        run: |
+          if [ -f .watchdog.pid ]; then
+            kill $(cat .watchdog.pid) 2>/dev/null || true
+            rm -f .watchdog.pid
+          fi
+          echo "--- watchdog log tail ---"
+          tail -n 20 .watchdog.log 2>/dev/null || echo "(no watchdog log)"
+          echo "--- final flush ---"
+          BRANCH="claude/transcripts-backfill"
+          git add .transcripts/ src/content/episodes/ 2>/dev/null
+          if ! git diff --cached --quiet 2>/dev/null; then
+            SCRIBE=$(ls .transcripts/*.scribe.json 2>/dev/null | wc -l | tr -d ' ')
+            git commit -m "Final flush ($SCRIBE scribe files)" --quiet 2>/dev/null || true
+            git fetch origin "$BRANCH" --quiet 2>/dev/null || true
+            git rebase --autostash "origin/$BRANCH" --quiet 2>/dev/null || true
+            for attempt in 1 2 3 4 5; do
+              if git push origin "HEAD:$BRANCH" 2>&1 | head -3; then
+                echo "[final flush] pushed"
+                break
+              fi
+              git fetch origin "$BRANCH" --quiet 2>/dev/null || true
+              git rebase --autostash "origin/$BRANCH" --quiet 2>/dev/null || true
+              sleep $((attempt * 3))
+            done
+          else
+            echo "Nothing to flush — watchdog + per-episode push already pushed everything."
+          fi
 
       # Critical safety net: even if every other step fails or the job
       # is cancelled by the 6h cap, this `if: always()` step runs

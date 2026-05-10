@@ -303,13 +303,16 @@ function inferAudioExt(url) {
 function shortHash(s) { return createHash('sha1').update(String(s)).digest('hex').slice(0, 12); }
 
 // Per-episode checkpoint: stage+commit+push the latest .transcripts/
-// state to the current branch (claude/transcripts-backfill in CI). Best-
-// effort — a network blip or git-lock contention logs a warning and
-// keeps going. The next successful checkpoint catches up. Only fires
-// when CHECKPOINT_PUSH=1 (set by the CI workflow); local dev is a no-op.
+// and src/content/episodes/ state to the current branch. Retries up
+// to 5 times with exponential backoff, fetching+rebasing between
+// attempts so we don't get stuck when the background watchdog has
+// pushed in the meantime. Only fires when CHECKPOINT_PUSH=1 (set by
+// the CI workflow); local dev is a no-op.
 function checkpointPush(reason) {
   if (process.env.CHECKPOINT_PUSH !== '1') return;
-  const run = (args) => spawnSync('git', args, { encoding: 'utf8', timeout: 60_000 });
+  const run = (args, opts = {}) =>
+    spawnSync('git', args, { encoding: 'utf8', timeout: 60_000, ...opts });
+  const sleepSync = (ms) => spawnSync('sleep', [String(ms / 1000)]);
   try {
     run(['add', '.transcripts/', 'src/content/episodes/']);
     const diff = run(['diff', '--cached', '--quiet']);
@@ -319,16 +322,44 @@ function checkpointPush(reason) {
       log(`  ⚠ checkpoint commit failed (${(c.stderr || '').trim().slice(0, 120)})`);
       return;
     }
-    const p = run(['push', 'origin', 'HEAD']);
-    if (p.status !== 0) {
-      log(`  ⚠ checkpoint push failed (${(p.stderr || '').trim().slice(0, 120)}); will retry next checkpoint`);
-    } else {
-      log('  • pushed checkpoint to claude/transcripts-backfill');
+    // Try to push. If origin advanced (e.g., the watchdog pushed),
+    // fetch + rebase + retry. Up to 5 attempts.
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      const p = run(['push', 'origin', 'HEAD']);
+      if (p.status === 0) {
+        log(`  • pushed checkpoint to claude/transcripts-backfill${attempt > 1 ? ` (attempt ${attempt})` : ''}`);
+        return;
+      }
+      const stderr = (p.stderr || '').trim().slice(0, 200);
+      log(`  ⚠ push attempt ${attempt}/5 failed: ${stderr}`);
+      // Reconcile with origin and try again.
+      run(['fetch', 'origin', 'HEAD'], { timeout: 30_000 });
+      run(['rebase', '--autostash', 'FETCH_HEAD'], { timeout: 30_000 });
+      sleepSync(2000 * attempt); // 2s, 4s, 6s, 8s
     }
+    log('  ⚠ all 5 push attempts failed; relying on watchdog + artifact-upload safety net');
   } catch (err) {
     log(`  ⚠ checkpoint error: ${err.message}`);
   }
 }
+
+// SIGTERM/SIGINT handler: when GitHub Actions cancels the runner (6h
+// cap, manual cancel, etc.) the Node process receives SIGTERM with a
+// brief grace window before SIGKILL. Use that window to flush a final
+// checkpoint push, so files written-but-not-yet-pushed escape the dying
+// VM. Idempotent — the no-diff guard inside checkpointPush makes a
+// double-fire harmless.
+let __shuttingDown = false;
+function shutdownFlush(signal) {
+  if (__shuttingDown) return;
+  __shuttingDown = true;
+  log('');
+  log(`━━━ Caught ${signal} — final checkpoint push before exit ━━━`);
+  try { checkpointPush(`shutdown via ${signal}`); } catch {}
+  process.exit(143); // 128 + SIGTERM number; conventional
+}
+process.on('SIGTERM', () => shutdownFlush('SIGTERM'));
+process.on('SIGINT', () => shutdownFlush('SIGINT'));
 
 // ---- Audio download ------------------------------------------------------------
 async function downloadFile(url, outPath) {
@@ -344,7 +375,12 @@ async function scribeTranscribe(audioPath) {
   const mime = { mp3: 'audio/mpeg', m4a: 'audio/m4a', aac: 'audio/aac', wav: 'audio/wav', ogg: 'audio/ogg' }[ext] ?? 'audio/mpeg';
   const form = new FormData();
   form.append('file', new Blob([data], { type: mime }), basename(audioPath));
-  form.append('model_id', 'scribe_v1');
+  // Scribe v2 batch: same endpoint + price as v1, better accuracy on
+  // proper nouns (Wendell Berry, Ivan Illich, Catholic Social Teaching,
+  // Rizoma Field School, etc.) which is exactly what an interview show
+  // needs. v2-Realtime is a different streaming WebSocket product —
+  // we are NOT using that.
+  form.append('model_id', 'scribe_v2');
   form.append('diarize', 'true');
   form.append('timestamps_granularity', 'word');
   form.append('language_code', 'en');
