@@ -31,6 +31,7 @@ import { Blob } from 'node:buffer';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 
 const args = parseArgs(process.argv.slice(2));
 const FEED = args.feed ?? 'https://anchor.fm/s/68308b7c/podcast/rss';
@@ -159,6 +160,12 @@ async function processEpisode(it) {
     log('  • transcribing with ElevenLabs Scribe…');
     scribe = await scribeTranscribe(audioPath);
     await writeFile(txPath, JSON.stringify(scribe, null, 2));
+    // Critical: push this transcript to the durable branch immediately.
+    // If the runner dies after the next line, this scribe.json is
+    // already on origin/claude/transcripts-backfill — no rework, no
+    // re-spend on Scribe. CHECKPOINT_PUSH=1 is set by CI; locally this
+    // is a no-op so dev runs don't accidentally push.
+    checkpointPush(`scribe.json for ${baseName}`);
   }
 
   const utterances = wordsToUtterances(scribe.words ?? []);
@@ -192,6 +199,11 @@ async function processEpisode(it) {
   });
   await writeFile(outMdxPath, mdx);
   log(`  ✓ wrote ${outMdxPath}`);
+  // Push the MDX (and any not-yet-pushed enrich.json) for this episode
+  // before moving to the next. Combined with the scribe-time checkpoint
+  // above, this means a runner death can lose at most the in-flight
+  // episode's downstream artifacts — its scribe.json is already safe.
+  checkpointPush(`episode ${baseName}`);
 
   return { guid: it.guid, title: it.title, number, path: outMdxPath };
 }
@@ -244,6 +256,34 @@ function inferAudioExt(url) {
   return m ? m[1].toLowerCase() : 'mp3';
 }
 function shortHash(s) { return createHash('sha1').update(String(s)).digest('hex').slice(0, 12); }
+
+// Per-episode checkpoint: stage+commit+push the latest .transcripts/
+// state to the current branch (claude/transcripts-backfill in CI). Best-
+// effort — a network blip or git-lock contention logs a warning and
+// keeps going. The next successful checkpoint catches up. Only fires
+// when CHECKPOINT_PUSH=1 (set by the CI workflow); local dev is a no-op.
+function checkpointPush(reason) {
+  if (process.env.CHECKPOINT_PUSH !== '1') return;
+  const run = (args) => spawnSync('git', args, { encoding: 'utf8', timeout: 60_000 });
+  try {
+    run(['add', '.transcripts/', 'src/content/episodes/']);
+    const diff = run(['diff', '--cached', '--quiet']);
+    if (diff.status === 0) return; // nothing staged → nothing to do
+    const c = run(['commit', '-m', `Checkpoint: ${reason}`, '--quiet']);
+    if (c.status !== 0) {
+      log(`  ⚠ checkpoint commit failed (${(c.stderr || '').trim().slice(0, 120)})`);
+      return;
+    }
+    const p = run(['push', 'origin', 'HEAD']);
+    if (p.status !== 0) {
+      log(`  ⚠ checkpoint push failed (${(p.stderr || '').trim().slice(0, 120)}); will retry next checkpoint`);
+    } else {
+      log('  • pushed checkpoint to claude/transcripts-backfill');
+    }
+  } catch (err) {
+    log(`  ⚠ checkpoint error: ${err.message}`);
+  }
+}
 
 // ---- Audio download ------------------------------------------------------------
 async function downloadFile(url, outPath) {
