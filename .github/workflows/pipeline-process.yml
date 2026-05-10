@@ -1,0 +1,106 @@
+name: Pipeline · process episode
+
+# The big one. Walks an episode through the state machine from
+# DRIVE_DETECTED → HUMAN_REVIEW. Each stage is idempotent (no-op if
+# state.state >= stage's "after" state) so we can re-run safely.
+#
+# This workflow is invoked once per episode, by pipeline-ingest.yml
+# (or manually via workflow_dispatch).
+#
+# Each stage:
+#   - Pre-flight budget check (paid stages only)
+#   - Run the stage script
+#   - Update episode state on success
+#   - On failure: record error, transition to BLOCKED_NEEDS_HUMAN
+#
+# `if: always()` cleanup at end commits + pushes whatever state we got.
+
+on:
+  workflow_dispatch:
+    inputs:
+      episode_id:
+        description: 'Episode ID (allocated by ingest)'
+        required: true
+      from_stage:
+        description: 'Resume from a specific stage (default: auto)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pipeline-process-${{ github.event.inputs.episode_id }}
+  cancel-in-progress: false
+
+jobs:
+  process:
+    name: Process ${{ github.event.inputs.episode_id }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 330   # 5.5h — well under the 6h cap; per-stage checkpoints handle the rest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install deps + ffmpeg
+        run: |
+          npm install --no-audit --no-fund
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+
+      - name: Configure git
+        run: |
+          git config user.name "pipeline-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Verify readiness probe is green & fresh
+        run: node scripts/pipeline/gate.mjs
+
+      - name: Run state machine
+        id: process
+        env:
+          EPISODE_ID: ${{ github.event.inputs.episode_id }}
+          FROM_STAGE: ${{ github.event.inputs.from_stage }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: node scripts/pipeline/orchestrator.mjs
+
+      - name: Snapshot work-in-progress as artifact (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-${{ github.event.inputs.episode_id }}-${{ github.run_id }}
+          path: |
+            .pipeline-state/episodes/${{ github.event.inputs.episode_id }}.json
+            .pipeline-tmp/${{ github.event.inputs.episode_id }}/
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Final state flush (always)
+        if: always()
+        run: |
+          if [ -d .pipeline-state ]; then
+            cd .pipeline-state
+            git add .
+            if ! git diff --cached --quiet 2>/dev/null; then
+              git commit -m "Final flush for ${{ github.event.inputs.episode_id }}" --quiet || true
+              for attempt in 1 2 3 4 5; do
+                if git push origin pipeline-state --quiet 2>/dev/null; then
+                  echo "[final flush] pushed"; break
+                fi
+                git fetch origin pipeline-state --quiet || true
+                git rebase --autostash origin/pipeline-state --quiet || true
+                sleep $((attempt * 3))
+              done
+            fi
+          fi

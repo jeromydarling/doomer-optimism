@@ -29,6 +29,19 @@ export const site = {
     posterUrl:
       'https://github.com/jeromydarling/doomer-optimism/releases/download/latest-promo/poster.jpg',
   },
+  // /admin is the production CMS surface for Ashley. Auth is GitHub
+  // OAuth Device Flow — no client_secret needed, works on a static
+  // site, three clicks. Repo and pipeline-state branch are the
+  // single source of truth for the queue.
+  admin: {
+    repo: 'jeromydarling/doomer-optimism',
+    stateBranch: 'pipeline-state',
+    publishWorkflow: 'pipeline-publish.yml',
+    // Set this once at github.com/settings/developers → "New OAuth App".
+    // Authorization callback URL: any value (Device Flow doesn't redirect).
+    // Enable "Device Flow" in the app settings.
+    githubOAuthClientId: 'PLACEHOLDER_OAUTH_CLIENT_ID',
+  },
 } as const;
 
 export const pillarOrder = [
