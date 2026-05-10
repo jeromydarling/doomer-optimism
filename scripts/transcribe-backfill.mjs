@@ -110,6 +110,51 @@ if (failed.length) {
   failed.forEach((r) => log(`  ${r.guid}  ${r.title}  →  ${r.error}`));
 }
 
+// On dry-runs, print a cost projection so we know whether a real run
+// will fit under the available ElevenLabs credit balance.
+if (DRY) {
+  const cached = [];
+  const fresh = [];
+  for (const it of slice) {
+    const txPath = join(CACHE_DIR, `${shortHash(it.guid)}.scribe.json`);
+    (existsSync(txPath) ? cached : fresh).push(it);
+  }
+  const sumSec = (xs) => xs.reduce((s, x) => s + (x.durationSeconds || 0), 0);
+  const cachedSec = sumSec(cached);
+  const freshSec = sumSec(fresh);
+  const fmtH = (s) => {
+    const h = Math.floor(s / 3600);
+    const m = Math.round((s % 3600) / 60);
+    return `${h}h ${String(m).padStart(2, '0')}m`;
+  };
+  const noDur = fresh.filter((x) => !x.durationSeconds).length;
+
+  log('');
+  log('━━━ Dry-run cost projection ━━━');
+  log(`  Cached (skipped): ${cached.length} episodes / ${fmtH(cachedSec)}`);
+  log(`  Fresh (would transcribe): ${fresh.length} episodes / ${fmtH(freshSec)}`);
+  if (noDur) log(`    (note: ${noDur} fresh episodes have no <itunes:duration> in feed; cost may be undercounted)`);
+  log('');
+  log('  Per-episode list (fresh, sorted by episode number):');
+  const sorted = [...fresh].sort((a, b) => (a.episodeNumber ?? 0) - (b.episodeNumber ?? 0));
+  for (const it of sorted) {
+    const num = it.episodeNumber != null ? `#${String(it.episodeNumber).padStart(3, ' ')}` : '#???';
+    const dur = it.durationSeconds ? fmtH(it.durationSeconds) : '   ?  ';
+    log(`    ${num}  ${dur}  ${it.title.slice(0, 80)}`);
+  }
+  log('');
+  log('  Credit projection (Scribe v1, varies by plan tier):');
+  const minutes = freshSec / 60;
+  for (const rate of [25, 30, 35, 40, 45]) {
+    const credits = Math.round(minutes * rate);
+    log(`    @ ${rate} credits/min → ${credits.toLocaleString()} credits`);
+  }
+  log('');
+  log('  Verify the empirical rate against your billing dashboard:');
+  log('    last full run cost / minutes processed = your actual rate');
+  log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+}
+
 // =================================================================================
 
 async function processEpisode(it) {
