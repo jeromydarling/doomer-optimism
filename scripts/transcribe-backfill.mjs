@@ -368,28 +368,96 @@ async function downloadFile(url, outPath) {
   await pipeline(Readable.fromWeb(res.body), createWriteStream(outPath));
 }
 
+// Curated keyterm prompt list for Scribe v2. Biases the model toward
+// these exact spellings on every call, which dramatically reduces WER
+// on the proper-noun-dense interviews that make up Doomer Optimism's
+// archive. Edit freely — v2 batch supports up to 1000 entries × 50
+// chars each; we're using ~30, plenty of room for adding recurring
+// guests as the show evolves.
+const SCRIBE_KEYTERMS = [
+  // Show + people
+  'Doomer Optimism',
+  'Ashley Colby Fitzgerald',
+  'Ashley Colby',
+  'Rizoma Field School',
+  'Jeromy Darling',
+  // Intellectual lineage
+  'Wendell Berry',
+  'Paul Kingsnorth',
+  'Ivan Illich',
+  'Christopher Lasch',
+  'Morris Berman',
+  'Alasdair MacIntyre',
+  'Patrick Deneen',
+  'Charles Taylor',
+  'Allan Carlson',
+  'Rod Dreher',
+  'Chris Smaje',
+  // Concepts + traditions
+  'Catholic Social Teaching',
+  'Distributism',
+  'Subsidiarity',
+  'Permaculture',
+  'Regenerative Agriculture',
+  'Right to Repair',
+  'Localism',
+  'Tech-limited childhood',
+  'Bread and Roses',
+  'The Need to Be Whole',
+  'Why Liberalism Failed',
+  // Books / works
+  'Tools for Conviviality',
+  'The Unsettling of America',
+  'A Secular Age',
+];
+
 // ---- ElevenLabs Scribe ---------------------------------------------------------
-async function scribeTranscribe(audioPath) {
+async function scribeTranscribe(audioPath, opts = {}) {
+  const { skipKeyterms = false, skipNoVerbatim = false } = opts;
   const data = await readFile(audioPath);
   const ext = audioPath.split('.').pop()?.toLowerCase() ?? 'mp3';
   const mime = { mp3: 'audio/mpeg', m4a: 'audio/m4a', aac: 'audio/aac', wav: 'audio/wav', ogg: 'audio/ogg' }[ext] ?? 'audio/mpeg';
   const form = new FormData();
   form.append('file', new Blob([data], { type: mime }), basename(audioPath));
   // Scribe v2 batch: same endpoint + price as v1, better accuracy on
-  // proper nouns (Wendell Berry, Ivan Illich, Catholic Social Teaching,
-  // Rizoma Field School, etc.) which is exactly what an interview show
-  // needs. v2-Realtime is a different streaming WebSocket product —
-  // we are NOT using that.
+  // proper nouns. v2-Realtime is a different streaming WebSocket
+  // product — we are NOT using that.
   form.append('model_id', 'scribe_v2');
   form.append('diarize', 'true');
   form.append('timestamps_granularity', 'word');
   form.append('language_code', 'en');
+  // Keyterm prompting (v2 batch only): bias toward proper-noun spellings.
+  if (!skipKeyterms) {
+    form.append('keyterms', JSON.stringify(SCRIBE_KEYTERMS));
+  }
+  // No-verbatim: have Scribe drop fillers / false starts at source so
+  // we don't have to do as much cleanup downstream.
+  if (!skipNoVerbatim) {
+    form.append('no_verbatim', 'true');
+  }
 
   const res = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
     method: 'POST',
     headers: { 'xi-api-key': ELEVEN_KEY },
     body: form,
   });
+  // Self-heal on 4xx that mention keyterms / no_verbatim. If Scribe v2's
+  // exact param names differ from what we're sending, we strip the
+  // offending one and retry — once each — instead of losing the whole
+  // call. The audio file has already been read into memory, so a retry
+  // is cheap.
+  if (res.status >= 400 && res.status < 500) {
+    const body = await res.text();
+    if (!skipKeyterms && /keyterm/i.test(body)) {
+      log('  ⚠ Scribe rejected keyterms param; retrying without keyterms');
+      return scribeTranscribe(audioPath, { ...opts, skipKeyterms: true });
+    }
+    if (!skipNoVerbatim && /no[_ ]?verbatim/i.test(body)) {
+      log('  ⚠ Scribe rejected no_verbatim param; retrying without no_verbatim');
+      return scribeTranscribe(audioPath, { ...opts, skipNoVerbatim: true });
+    }
+    throw new Error(`scribe ${res.status}: ${body}`);
+  }
   if (!res.ok) throw new Error(`scribe ${res.status}: ${await res.text()}`);
   return res.json();
 }
