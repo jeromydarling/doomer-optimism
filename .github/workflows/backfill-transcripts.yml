@@ -54,32 +54,43 @@ jobs:
       - name: Install npm deps
         run: npm install --no-audit --no-fund
 
-      # Durable transcript storage. The .transcripts/*.scribe.json and
-      # .transcripts/enriched/ files are committed to the PR branch by
-      # peter-evans (via add-paths). On every re-run we restore those
-      # committed files into the working tree so the script sees them as
-      # cached and skips the expensive Scribe + Haiku calls. This is more
-      # reliable than GitHub Actions cache, which evicts entries when the
-      # per-repo budget is exceeded.
-      - name: Restore .transcripts from PR branch (if present)
+      - name: Switch to claude/transcripts-backfill (so checkpoint pushes stack)
         run: |
           set -e
           BRANCH="claude/transcripts-backfill"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
-            echo "Branch $BRANCH exists; restoring .transcripts/ from it."
             git fetch --depth=1 origin "$BRANCH"
-            git checkout "origin/$BRANCH" -- .transcripts/ 2>/dev/null || echo "  (no .transcripts/ on the branch yet)"
-            SCRIBE=$(ls .transcripts/*.scribe.json 2>/dev/null | wc -l | tr -d ' ')
-            ENRICH=$(ls .transcripts/enriched/*.json 2>/dev/null | wc -l | tr -d ' ')
-            echo "  Restored: $SCRIBE scribe.json files, $ENRICH enriched.json files"
+            git checkout -B "$BRANCH" "origin/$BRANCH"
+            echo "On existing branch $BRANCH at $(git rev-parse --short HEAD)"
           else
-            echo "Branch $BRANCH does not exist yet — first run, no cache to restore."
+            git checkout -B "$BRANCH"
+            echo "Created new branch $BRANCH from main"
           fi
+          SCRIBE=$(ls .transcripts/*.scribe.json 2>/dev/null | wc -l | tr -d ' ')
+          ENRICH=$(ls .transcripts/enriched/*.json 2>/dev/null | wc -l | tr -d ' ')
+          echo "Starting with $SCRIBE scribe.json files, $ENRICH enriched.json files cached."
+
+      # Durable transcript storage. Now lives entirely on the PR branch:
+      # the script itself git-pushes every freshly-written .scribe.json
+      # immediately after Scribe returns. A 6h-cap kill therefore loses
+      # at most the one in-flight episode. Belt-and-suspenders: the
+      # always-snapshot step further down also captures .transcripts/
+      # as a workflow artifact, recoverable from the workflow run page.
+      - name: Restore .transcripts from PR branch (no-op if already on branch)
+        run: |
+          SCRIBE=$(ls .transcripts/*.scribe.json 2>/dev/null | wc -l | tr -d ' ')
+          echo "Restored: $SCRIBE scribe.json files"
 
       - name: Run backfill
         env:
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Tells the script to git-push each finished scribe.json
+          # immediately. Locally (no GITHUB_ACTIONS env var) the script
+          # is a normal write-and-keep-going.
+          CHECKPOINT_PUSH: '1'
         run: |
           ARGS="--feed '${{ github.event.inputs.feed }}' --max ${{ github.event.inputs.max }}"
           if [ "${{ github.event.inputs.only }}" != "" ]; then
@@ -93,6 +104,20 @@ jobs:
           fi
           echo "Running: node scripts/transcribe-backfill.mjs $ARGS"
           eval node scripts/transcribe-backfill.mjs $ARGS
+
+      # Critical safety net: even if every other step fails or the job
+      # is cancelled by the 6h cap, this `if: always()` step runs
+      # during GHA's post-cancel cleanup window and uploads .transcripts/
+      # as a workflow artifact. Recoverable for 30 days from the run
+      # page even when peter-evans never gets to fire.
+      - name: Snapshot .transcripts/ as workflow artifact (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: transcripts-${{ github.run_id }}
+          path: .transcripts/
+          retention-days: 30
+          if-no-files-found: warn
 
       - name: Open pull request
         if: ${{ github.event.inputs.dry_run != 'true' }}
