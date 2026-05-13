@@ -9,8 +9,6 @@
 @import '@fontsource/cormorant-garamond/400-italic.css';
 @import '@fontsource/inter/400.css';
 @import '@fontsource/inter/500.css';
-@import '@fontsource/special-elite/400.css';
-@import '@fontsource/sacramento/400.css';
 
 @tailwind base;
 @tailwind components;
@@ -137,33 +135,27 @@
   .container-prose { max-width: 68ch; margin: 0 auto; padding: 0 1.25rem; }
 
   /* ---- Wordmark ----------------------------------------------------------
-     "DOOMER Optimism" — industrial-machine word in tight typewriter caps
-     beside the hand-written human reply in flowing handwritten script. */
+     Per Ashley: match the landing-page tagline pairing — "Doomer" in
+     dark display serif beside "Optimism" in italic terracotta serif.
+     Replaces the earlier typewriter+script combo. */
   .wordmark {
     display: inline-flex;
     align-items: baseline;
-    gap: 0.32em;
+    gap: 0.18em;
     line-height: 1;
     color: var(--ink);
+    font-family: 'Cormorant Garamond', Garamond, serif;
+    font-weight: 500;
   }
   .wordmark-doomer {
-    font-family: 'Special Elite', 'Courier Prime', monospace;
-    font-weight: 400;
-    text-transform: uppercase;
-    letter-spacing: -0.08em;
-    color: #312820;
+    color: var(--ink);
+    letter-spacing: -0.01em;
   }
   .wordmark-optimism {
-    font-family: 'Sacramento', 'Apple Chancery', cursive;
+    font-style: italic;
     font-weight: 400;
     color: var(--terracotta);
-    /* Sacramento sits with a higher x-height than Italianno; modest size
-       bump is enough to balance the chunky typewriter caps beside it. */
-    font-size: 1.35em;
-    line-height: 0.9;
-    letter-spacing: 0.005em;
-    margin-left: 0.06em;
-    transform: translateY(0.04em);
+    letter-spacing: 0;
   }
 
   .pillar-pill {
