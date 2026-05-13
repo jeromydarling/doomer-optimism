@@ -1,0 +1,55 @@
+name: Re-enrich pending episodes
+
+# Regenerates summary/chapters/bibliography/pull-quotes for any episode
+# MDX whose `summary` is the placeholder "[Pending re-enrichment …]".
+#
+# Triggered manually, or auto-fires when scripts/reenrich-mdx.mjs or this
+# workflow itself changes — that way merging a placeholder rewrite (which
+# sets summary to the placeholder string) immediately kicks off a re-enrich.
+
+on:
+  workflow_dispatch: {}
+  push:
+    paths:
+      - 'scripts/reenrich-mdx.mjs'
+      - '.github/workflows/reenrich-episodes.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: reenrich-episodes
+  cancel-in-progress: false
+
+jobs:
+  reenrich:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm install --no-audit --no-fund
+
+      - name: Re-enrich all pending
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node scripts/reenrich-mdx.mjs --all-pending
+
+      - name: Commit results back
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/content/episodes/
+          if ! git diff --cached --quiet; then
+            git commit -m "Re-enrich: regenerate summaries from transcripts (post-RSS metadata fix)"
+            for attempt in 1 2 3 4 5; do
+              if git push origin HEAD:${{ github.ref_name }} 2>&1 | head -3; then break; fi
+              git fetch origin ${{ github.ref_name }} --quiet || true
+              git rebase --autostash origin/${{ github.ref_name }} --quiet || true
+              sleep $((attempt * 3))
+            done
+          fi

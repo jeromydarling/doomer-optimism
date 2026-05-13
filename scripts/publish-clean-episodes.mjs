@@ -13,7 +13,7 @@ import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const EPISODES_DIR = 'src/content/episodes';
-const TOP_N = 8; // un-draft the 8 most recent clean episodes
+const TOP_N = 100; // un-draft all that pass the safety check
 
 function splitFrontmatter(text) {
   const m = text.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
@@ -49,7 +49,9 @@ for (const f of readdirSync(EPISODES_DIR).filter((f) => f.endsWith('.mdx'))) {
   // Skip if summary opens with "Ashley" as the protagonist (the
   // Haiku-attributes-host-as-guest failure mode)
   const ashleyProtagonist = /^Ashley\s+(?:explores|examines|argues|describes|journeys|sits|joins|interviews|talks|reflects)/i.test(summary);
-  all.push({ file: f, path, number, draft, audioUrl, summary, ashleyProtagonist });
+  // Skip if it's a placeholder waiting on the re-enrichment workflow
+  const pending = /^\[Pending re-enrichment/.test(summary);
+  all.push({ file: f, path, number, draft, audioUrl, summary, ashleyProtagonist, pending });
 }
 
 // "Clean" enough to ship:
@@ -57,7 +59,7 @@ for (const f of readdirSync(EPISODES_DIR).filter((f) => f.endsWith('.mdx'))) {
 //   - has an audioUrl (came through the RSS backfill, not v0 scaffold)
 //   - summary doesn't open with "Ashley explores/journeys/etc."
 const candidates = all
-  .filter((e) => e.draft && e.audioUrl && !e.ashleyProtagonist)
+  .filter((e) => e.draft && e.audioUrl && !e.ashleyProtagonist && !e.pending)
   .sort((a, b) => b.number - a.number)
   .slice(0, TOP_N);
 
