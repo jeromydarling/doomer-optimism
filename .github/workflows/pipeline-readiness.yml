@@ -1,0 +1,76 @@
+name: Pipeline readiness probe
+
+# Hourly health check that gates the pipeline. The pipeline workflow refuses
+# to start unless the latest probe is green AND <2h old.
+#
+# Probes: ElevenLabs balance, Anthropic auth, Drive OAuth refresh,
+# Buffer auth, ffmpeg, disk space, pipeline-state branch reachability,
+# src/content/episodes/ writable.
+#
+# Adobe MCP probe is a known soft-fail right now (no headless story yet) —
+# it's logged but doesn't block green status.
+
+on:
+  schedule:
+    - cron: '17 * * * *'   # every hour at :17
+  workflow_dispatch: {}
+  push:
+    paths:
+      - 'scripts/pipeline/readiness.mjs'
+      - 'scripts/pipeline/budget-guard.mjs'
+      - '.github/workflows/pipeline-readiness.yml'
+
+permissions:
+  contents: write   # to push pipeline-state branch
+
+concurrency:
+  group: pipeline-readiness
+  cancel-in-progress: false   # let probes finish; staleness gate handles overlap
+
+jobs:
+  probe:
+    name: Run all probes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm install --no-audit --no-fund
+
+      - name: Configure git for state-branch pushes
+        run: |
+          git config user.name "pipeline-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Run probes + write pipeline-state/readiness.json
+        env:
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
+          BUFFER_API_TOKEN: ${{ secrets.BUFFER_API_TOKEN }}
+        run: node scripts/pipeline/readiness.mjs
+
+      - name: Surface failures in job summary
+        if: always()
+        run: |
+          if [ -f .pipeline-state/readiness.json ]; then
+            echo "## Latest readiness probe" >> $GITHUB_STEP_SUMMARY
+            cat .pipeline-state/readiness.json | jq -r '
+              "**Green:** \(.green)",
+              "**Blocking failures:** \(.blockingFailures | join(", ") // "(none)")",
+              "",
+              "| Probe | OK | Healthy | Note |",
+              "|---|---|---|---|",
+              (.probes[] | "| \(.name) | \(.ok) | \(.healthy // "n/a") | \(.note // .error // "") |")
+            ' >> $GITHUB_STEP_SUMMARY
+          fi

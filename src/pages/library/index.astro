@@ -1,7 +1,7 @@
 ---
 import { getCollection } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { withBase, formatDate } from '../../lib/site';
+import { withBase, formatDate, site } from '../../lib/site';
 import BibliographyLink from '../../components/BibliographyLink.astro';
 
 const articles = (await getCollection('articles', (a) => !a.data.draft))
@@ -35,8 +35,7 @@ const byKind = {
     <p class="font-serif text-xl text-umber-100 max-w-3xl mt-4">
       Every book, paper, film, and resource referenced across {episodes.length}+
       conversations — categorized, searchable, and traceable back to the episode
-      where it came up. Companion essays sit alongside the bibliography so you can
-      read deeper into any thread.
+      where it came up.
     </p>
   </div>
 
@@ -44,24 +43,32 @@ const byKind = {
     <div id="search" class="mt-2"></div>
   </div>
 
-  {articles.length > 0 && (
-    <section class="container-wide pb-16">
-      <p class="smallcaps mb-3">Companion Essays</p>
-      <h2 class="!text-2xl mb-6">Long-form, episode-paired</h2>
-      <ul class="grid md:grid-cols-2 gap-8">
-        {articles.map((a) => (
-          <li>
-            <a href={withBase(`/library/${a.slug}`)} class="!border-b-0 group block">
-              <h3 class="!text-2xl !text-umber-300 group-hover:!text-terracotta-500 leading-snug mb-1">{a.data.title}</h3>
-              {a.data.subtitle && <p class="italic text-umber-100 mb-2">{a.data.subtitle}</p>}
-              <p class="text-umber-200 leading-relaxed">{a.data.summary}</p>
-              <p class="smallcaps mt-3">{a.data.author} · {formatDate(a.data.pubDate)} · {a.data.readingMinutes} min</p>
-            </a>
-          </li>
-        ))}
-      </ul>
-    </section>
-  )}
+  <section class="container-wide pb-16">
+    <p class="smallcaps mb-3">Companion Essays</p>
+    {articles.length > 0 ? (
+      <>
+        <h2 class="!text-2xl mb-6">Long-form, episode-paired</h2>
+        <ul class="grid md:grid-cols-2 gap-8">
+          {articles.map((a) => (
+            <li>
+              <a href={withBase(`/library/${a.slug}`)} class="!border-b-0 group block">
+                <h3 class="!text-2xl !text-umber-300 group-hover:!text-terracotta-500 leading-snug mb-1">{a.data.title}</h3>
+                {a.data.subtitle && <p class="italic text-umber-100 mb-2">{a.data.subtitle}</p>}
+                <p class="text-umber-200 leading-relaxed">{a.data.summary}</p>
+                <p class="smallcaps mt-3">{a.data.author} · {formatDate(a.data.pubDate)} · {a.data.readingMinutes} min</p>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </>
+    ) : (
+      <p class="font-serif text-lg text-umber-100 italic max-w-prose">
+        Forthcoming. Every once in a while we'll release a long-form companion essay
+        through <a href={site.social.substack}>Substack</a> — a 1,500–2,500 word
+        deepening of an episode or a thread we keep returning to.
+      </p>
+    )}
+  </section>
 
   <section class="container-wide pb-24">
     <p class="smallcaps mb-3">Catalogued Sources</p>

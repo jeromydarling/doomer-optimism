@@ -3,7 +3,6 @@ title: Conservation & Environment
 shortTitle: Conservation
 order: 2
 accent: moss
-leadVoice: James Pogue
 blurb: >-
   Land stewardship, biodiversity, and environmental justice — countering extractive
   systems through grounded, community-based models of conservation and restoration.

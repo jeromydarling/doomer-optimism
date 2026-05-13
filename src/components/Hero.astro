@@ -1,92 +1,45 @@
 ---
 import { withBase } from '../lib/site';
-
-const heroImg = withBase('/hero/Firefly_Gemini%20Flash_An%20editorial%20pen-and-ink%20illustration%20in%20the%20style%20of%20a%20vintage%20Wall%20Street%20Journal%20h%20558999.png');
+import Ornament from './Ornament.astro';
 ---
 
-<section class="hero">
-  <div class="hero-frame">
-    <img
-      class="hero-bg"
-      src={heroImg}
-      alt="Pen-and-ink illustration: orchards and a rising sun in the foreground; weathered turbines and smokestacks dissolving into the alpine ridgeline behind."
-      loading="eager"
-      width="1376"
-      height="768"
-    />
-    <div class="hero-overlay">
-      <h1 class="hero-headline">
+<section class="relative overflow-hidden border-b border-umber-300/15">
+  <div class="container-wide pt-16 md:pt-28 pb-20 md:pb-32 relative">
+    <div class="max-w-3xl">
+      <p class="smallcaps mb-6 flex items-center gap-3">
+        <Ornament size={20} />
+        Doomer Optimism
+      </p>
+      <h1 class="!text-[clamp(2.75rem,8vw,6rem)] !leading-[1.02] mb-8 text-umber-300">
         How do we live well<br />
-        <em>in the age of the Machine?</em>
+        <span class="italic font-serif text-terracotta-500">in the age of the Machine?</span>
       </h1>
+      <p class="font-serif text-xl md:text-2xl leading-relaxed text-umber-100 max-w-2xl">
+        A pluralistic conversation with farmers, builders, repairers, scholars, and parents
+        building human-scale alternatives — clear-eyed about systemic fragility,
+        hopeful about the slow work of rebuilding.
+      </p>
+      <div class="mt-10 flex flex-wrap gap-3">
+        <a href={withBase('/episodes')} class="btn btn-primary">Listen to episodes</a>
+        <a href={withBase('/about')} class="btn">What is Doomer Optimism?</a>
+      </div>
     </div>
   </div>
+
+  <!-- decorative horizon ornament -->
+  <svg
+    aria-hidden="true"
+    class="absolute -right-16 top-12 hidden md:block opacity-[0.08]"
+    width="520"
+    height="520"
+    viewBox="0 0 520 520"
+    fill="none"
+  >
+    <circle cx="260" cy="260" r="200" stroke="currentColor" stroke-width="1" />
+    <circle cx="260" cy="260" r="160" stroke="currentColor" stroke-width="1" />
+    <circle cx="260" cy="260" r="120" stroke="currentColor" stroke-width="1" />
+    <circle cx="260" cy="260" r="80" stroke="currentColor" stroke-width="1" />
+    <line x1="60" y1="260" x2="460" y2="260" stroke="currentColor" stroke-width="1" />
+    <line x1="260" y1="60" x2="260" y2="460" stroke="currentColor" stroke-width="1" />
+  </svg>
 </section>
-
-<style>
-  .hero {
-    background: var(--paper);
-    border-bottom: 1px solid var(--rule);
-  }
-
-  .hero-frame {
-    position: relative;
-    max-width: 1376px;
-    margin: 0 auto;
-  }
-
-  .hero-bg {
-    display: block;
-    width: 100%;
-    height: auto;
-  }
-
-  .hero-overlay {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: flex-start;
-    /* Top padding pulls the headline up into the open dawn-sky portion
-       of the illustration (roughly the upper-left quadrant) instead of
-       the vertical center where it would crowd the orchard line. */
-    padding: 6% clamp(1.25rem, 5%, 4rem) 0;
-    pointer-events: none;
-  }
-
-  .hero-headline {
-    font-family: 'Cormorant Garamond', Garamond, serif;
-    font-weight: 500;
-    font-size: clamp(1.75rem, 4.6vw, 4.5rem);
-    line-height: 1.04;
-    letter-spacing: -0.005em;
-    color: var(--ink);
-    max-width: 50%;
-    margin: 0;
-    pointer-events: auto;
-    /* Slight text shadow to keep the headline readable when stippled
-       sun rays from the illustration cross behind it. */
-    text-shadow: 0 1px 0 rgba(244, 236, 219, 0.75);
-  }
-
-  .hero-headline em {
-    font-style: italic;
-    color: var(--terracotta);
-    display: block;
-    margin-top: 0.05em;
-  }
-
-  /* Mobile: at small widths the image gets too small to host overlaid
-     text legibly. Drop the headline below the image instead. */
-  @media (max-width: 639px) {
-    .hero-overlay {
-      position: static;
-      padding: 1.5rem 1.25rem 0.5rem;
-      align-items: flex-start;
-    }
-    .hero-headline {
-      max-width: 100%;
-      font-size: clamp(2rem, 7.5vw, 2.5rem);
-      text-shadow: none;
-    }
-  }
-</style>

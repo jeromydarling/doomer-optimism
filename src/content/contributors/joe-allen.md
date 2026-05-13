@@ -1,8 +1,8 @@
 ---
 name: Joe Allen
-role: Lead Voice — Technology Critique
+role: Guest
 affiliation: Singularity Weekly
-featured: true
+featured: false
 pillars:
   - technology-ai-transhumanism
 bio: >-

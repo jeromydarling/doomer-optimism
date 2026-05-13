@@ -3,7 +3,6 @@ title: Regenerative Agriculture
 shortTitle: Regenerative Ag
 order: 1
 accent: moss
-leadVoice: Peter Allen
 blurb: >-
   Rebuilding soil, local food systems, and agrarian communities as foundations for
   food sovereignty and rural economic justice amid industrial consolidation.

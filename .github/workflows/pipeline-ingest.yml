@@ -1,0 +1,75 @@
+name: Pipeline · ingest new episode
+
+# Triggered by Zapier webhook (Drive "new file" → repository_dispatch).
+#
+# Zapier sends:
+#   curl -X POST https://api.github.com/repos/jeromydarling/doomer-optimism/dispatches \
+#     -H "Authorization: Bearer $PAT" \
+#     -H "Accept: application/vnd.github+json" \
+#     -d '{"event_type":"episode-detected","client_payload":{"driveFileId":"...","name":"..."}}'
+#
+# We:
+#   1. Verify readiness probe is green
+#   2. Allocate an episode ID (next available)
+#   3. Init state file → DRIVE_DETECTED
+#   4. Kick off pipeline-process for the new episode
+
+on:
+  repository_dispatch:
+    types: [episode-detected]
+  workflow_dispatch:
+    inputs:
+      driveFileId:
+        description: 'Google Drive file ID'
+        required: true
+      name:
+        description: 'Drive filename (any format; ingest will parse)'
+        required: false
+
+permissions:
+  contents: write
+  actions: write   # to dispatch pipeline-process
+
+concurrency:
+  group: pipeline-ingest-${{ github.event.client_payload.driveFileId || github.event.inputs.driveFileId }}
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    name: Validate + init state + dispatch processor
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm install --no-audit --no-fund
+
+      - name: Configure git
+        run: |
+          git config user.name "pipeline-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Verify readiness probe is green & fresh
+        run: node scripts/pipeline/gate.mjs
+
+      - name: Allocate episode ID + init state file
+        id: init
+        env:
+          EVENT_PAYLOAD: ${{ toJSON(github.event.client_payload) }}
+          INPUT_DRIVE_FILE_ID: ${{ github.event.inputs.driveFileId }}
+          INPUT_NAME: ${{ github.event.inputs.name }}
+        run: node scripts/pipeline/ingest.mjs
+
+      - name: Dispatch pipeline-process workflow
+        if: steps.init.outputs.episode_id != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run pipeline-process.yml \
+            -f episode_id="${{ steps.init.outputs.episode_id }}"

@@ -1,0 +1,522 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { site, withBase } from '../../lib/site';
+
+const { repo, stateBranch, publishWorkflow, githubOAuthClientId } = site.admin;
+---
+
+<BaseLayout title="Admin · Episode queue" noIndex={true}>
+  <div class="container-wide pt-10 md:pt-14 pb-20" data-admin-root>
+    <p class="smallcaps mb-3">Internal · Editor</p>
+    <h1 class="mb-6">Episode pipeline</h1>
+
+    <!-- Login gate -->
+    <section data-view="login" class="hidden">
+      <div class="max-w-2xl border border-umber-300/15 p-8 bg-parchment-50/60">
+        <p class="font-serif text-xl text-umber-100 mb-6">
+          Sign in with GitHub once to manage the episode queue. Three clicks. You'll
+          never see GitHub again.
+        </p>
+        <button
+          data-action="signin"
+          class="bg-umber-300 text-parchment-100 px-6 py-3 font-display text-xl hover:bg-terracotta-500 transition-colors"
+        >
+          Sign in with GitHub
+        </button>
+        <div data-step="device-code" class="hidden mt-6 p-4 border border-terracotta-500/40 bg-parchment-100">
+          <p class="smallcaps mb-2">Step 1</p>
+          <p class="mb-3">
+            Visit <a data-device-url href="#" target="_blank" rel="noopener" class="font-bold">github.com/login/device</a>
+            and enter this code:
+          </p>
+          <p data-user-code class="font-mono text-3xl tracking-widest text-terracotta-500 mb-4 select-all">—</p>
+          <p class="smallcaps mb-2">Step 2</p>
+          <p class="text-umber-100">
+            We'll detect when you've authorized. <span data-poll-status>Waiting…</span>
+          </p>
+        </div>
+        <p data-error class="hidden mt-4 text-oxblood-500"></p>
+        <p class="mt-6 text-sm text-umber-100/70">
+          One-time setup needed:
+          <code class="font-mono text-xs">{githubOAuthClientId}</code> in
+          <code class="font-mono text-xs">src/lib/site.ts</code> must be a real
+          OAuth App client ID with Device Flow enabled. See <code>docs/pipeline-design.md §9</code>.
+        </p>
+      </div>
+    </section>
+
+    <!-- Queue view -->
+    <section data-view="queue" class="hidden">
+      <div class="flex items-baseline justify-between mb-6 flex-wrap gap-3">
+        <p class="font-serif text-xl text-umber-100">
+          Signed in as <span data-user-name class="font-bold">—</span>.
+          <button data-action="signout" class="!border-b border-umber-300/30 hover:!border-terracotta-500 ml-2 text-base">Sign out</button>
+        </p>
+        <button
+          data-action="refresh"
+          class="smallcaps border border-umber-300/30 px-3 py-1.5 hover:border-terracotta-500"
+        >Refresh</button>
+      </div>
+
+      <div data-readiness class="mb-8 p-4 border bg-parchment-50/60"></div>
+
+      <div data-queue-empty class="hidden p-10 text-center border border-umber-300/15 bg-parchment-50/40">
+        <p class="font-serif text-xl text-umber-100">No episodes awaiting review.</p>
+        <p class="mt-2 text-umber-100/70">When Ashley uploads a recording to the Drive folder, it'll show up here.</p>
+      </div>
+
+      <div data-queue-list class="space-y-4"></div>
+
+      <h2 class="!text-2xl mt-12 mb-4">Blocked / waiting</h2>
+      <div data-blocked-list class="space-y-3"></div>
+
+      <details class="mt-12">
+        <summary class="cursor-pointer smallcaps border-b border-umber-300/15 pb-2">Recently published</summary>
+        <div data-published-list class="space-y-2 mt-4"></div>
+      </details>
+    </section>
+
+    <!-- Review view -->
+    <section data-view="review" class="hidden">
+      <button data-action="back-to-queue" class="smallcaps mb-6 hover:text-terracotta-500">← Back to queue</button>
+      <div data-review-content></div>
+    </section>
+
+    <!-- Loading -->
+    <section data-view="loading" class="hidden">
+      <p class="font-serif text-xl text-umber-100">Loading…</p>
+    </section>
+  </div>
+
+  <script is:inline define:vars={{ repo, stateBranch, publishWorkflow, githubOAuthClientId, basePath: withBase('/admin') }}>
+    // ──────────────────────────────────────────────────────────────────
+    // /admin — Single-page app for episode review + publish.
+    // Auth: GitHub OAuth Device Flow (no client_secret, works on static).
+    // State: Read pipeline-state branch via GitHub API; write via
+    //        workflow_dispatch using the user's token.
+    // ──────────────────────────────────────────────────────────────────
+
+    const TOKEN_KEY = 'doomer-admin-gh-token';
+    const USER_KEY = 'doomer-admin-gh-user';
+    const $ = (sel, root = document) => root.querySelector(sel);
+    const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+    const views = ['login', 'queue', 'review', 'loading'];
+    const showView = (name) => {
+      views.forEach((v) => $(`[data-view="${v}"]`).classList.toggle('hidden', v !== name));
+    };
+
+    function getToken() { return localStorage.getItem(TOKEN_KEY); }
+    function setToken(t) { localStorage.setItem(TOKEN_KEY, t); }
+    function clearToken() { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); }
+
+    async function gh(path, opts = {}) {
+      const res = await fetch(`https://api.github.com${path}`, {
+        ...opts,
+        headers: {
+          accept: 'application/vnd.github+json',
+          authorization: `Bearer ${getToken()}`,
+          'x-github-api-version': '2022-11-28',
+          ...(opts.headers || {}),
+        },
+      });
+      if (res.status === 401) {
+        clearToken();
+        showView('login');
+        throw new Error('Token rejected by GitHub. Please sign in again.');
+      }
+      return res;
+    }
+
+    // ── Device Flow ──────────────────────────────────────────────────
+    async function startDeviceFlow() {
+      const errEl = $('[data-error]');
+      errEl.classList.add('hidden');
+      if (githubOAuthClientId === 'PLACEHOLDER_OAUTH_CLIENT_ID') {
+        errEl.textContent = 'OAuth Client ID not configured. See docs/pipeline-design.md §9.';
+        errEl.classList.remove('hidden');
+        return;
+      }
+      const res = await fetch('https://github.com/login/device/code', {
+        method: 'POST',
+        headers: { accept: 'application/json', 'content-type': 'application/json' },
+        body: JSON.stringify({ client_id: githubOAuthClientId, scope: 'repo workflow' }),
+      });
+      if (!res.ok) {
+        errEl.textContent = `GitHub returned ${res.status}. Check that Device Flow is enabled on the OAuth App.`;
+        errEl.classList.remove('hidden');
+        return;
+      }
+      const { device_code, user_code, verification_uri, interval } = await res.json();
+      $('[data-step="device-code"]').classList.remove('hidden');
+      $('[data-user-code]').textContent = user_code;
+      $('[data-device-url]').href = verification_uri;
+      pollForToken(device_code, interval || 5);
+    }
+
+    async function pollForToken(device_code, interval) {
+      const poll = async () => {
+        const res = await fetch('https://github.com/login/oauth/access_token', {
+          method: 'POST',
+          headers: { accept: 'application/json', 'content-type': 'application/json' },
+          body: JSON.stringify({
+            client_id: githubOAuthClientId,
+            device_code,
+            grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+          }),
+        });
+        const json = await res.json();
+        if (json.access_token) {
+          setToken(json.access_token);
+          await loadUserAndShowQueue();
+          return;
+        }
+        if (json.error === 'authorization_pending') {
+          $('[data-poll-status]').textContent = 'Waiting…';
+          setTimeout(poll, interval * 1000);
+        } else if (json.error === 'slow_down') {
+          setTimeout(poll, (interval + 5) * 1000);
+        } else if (json.error === 'expired_token') {
+          $('[data-error]').textContent = 'Code expired. Click "Sign in" to try again.';
+          $('[data-error]').classList.remove('hidden');
+          $('[data-step="device-code"]').classList.add('hidden');
+        } else {
+          $('[data-error]').textContent = `GitHub: ${json.error_description || json.error || 'unknown error'}`;
+          $('[data-error]').classList.remove('hidden');
+        }
+      };
+      poll();
+    }
+
+    // ── Episode state from pipeline-state branch ─────────────────────
+    async function loadEpisodes() {
+      const res = await gh(`/repos/${repo}/contents/episodes?ref=${stateBranch}`);
+      if (res.status === 404) return [];   // empty branch
+      if (!res.ok) throw new Error(`GitHub contents API: ${res.status}`);
+      const files = await res.json();
+      const episodes = [];
+      for (const file of files.filter((f) => f.name.endsWith('.json'))) {
+        const r2 = await fetch(file.download_url);
+        if (!r2.ok) continue;
+        const json = await r2.json();
+        episodes.push(json);
+      }
+      return episodes.sort((a, b) =>
+        (b.lastTransitionAt || '').localeCompare(a.lastTransitionAt || ''),
+      );
+    }
+
+    async function loadReadiness() {
+      const url = `https://raw.githubusercontent.com/${repo}/${stateBranch}/readiness.json`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      return res.json();
+    }
+
+    // ── Render queue view ────────────────────────────────────────────
+    function renderReadiness(report) {
+      const el = $('[data-readiness]');
+      if (!report) {
+        el.className = 'mb-8 p-4 border border-umber-300/30 bg-parchment-50/60';
+        el.innerHTML = '<p class="smallcaps">Readiness</p><p class="text-umber-100">No probe report yet. Run pipeline-readiness workflow.</p>';
+        return;
+      }
+      const ageMin = Math.round((Date.now() - new Date(report.at).getTime()) / 60000);
+      const stale = ageMin > 120;
+      const healthy = report.green && !stale;
+      el.className = `mb-8 p-4 border ${healthy ? 'border-moss-500/40 bg-moss-500/5' : 'border-oxblood-500/40 bg-oxblood-500/5'}`;
+      el.innerHTML = `
+        <div class="flex items-baseline justify-between flex-wrap gap-2">
+          <p class="smallcaps">Readiness — ${healthy ? 'green' : (stale ? 'stale' : 'red')}</p>
+          <p class="text-sm text-umber-100">Probed ${ageMin}m ago</p>
+        </div>
+        ${report.blockingFailures?.length ? `<p class="mt-2 text-oxblood-500"><strong>Blocking:</strong> ${report.blockingFailures.join(', ')}</p>` : ''}
+        <details class="mt-2 text-sm">
+          <summary class="cursor-pointer text-umber-100">probe details</summary>
+          <ul class="mt-2 space-y-1">
+            ${(report.probes || []).map((p) => `
+              <li><span class="font-mono">${p.name}</span> — ${p.healthy === false ? '✗' : '✓'} ${p.note || p.error || ''}</li>
+            `).join('')}
+          </ul>
+        </details>
+      `;
+    }
+
+    function renderQueue(episodes) {
+      const review = episodes.filter((e) => e.state === 'HUMAN_REVIEW');
+      const blocked = episodes.filter((e) => e.state === 'BLOCKED_NEEDS_HUMAN' || e.state === 'WAITING_FOR_BUDGET');
+      const published = episodes.filter((e) => e.state === 'PUBLISHED').slice(0, 10);
+      const inFlight = episodes.filter((e) => !['HUMAN_REVIEW', 'BLOCKED_NEEDS_HUMAN', 'WAITING_FOR_BUDGET', 'PUBLISHED'].includes(e.state));
+
+      $('[data-queue-empty]').classList.toggle('hidden', review.length > 0 || inFlight.length > 0);
+
+      const list = $('[data-queue-list]');
+      list.innerHTML = [
+        ...review.map((e) => episodeCard(e, 'review')),
+        ...inFlight.map((e) => episodeCard(e, 'inflight')),
+      ].join('');
+      $$('[data-action="open-review"]').forEach((btn) => {
+        btn.addEventListener('click', () => openReview(btn.dataset.episodeId));
+      });
+
+      $('[data-blocked-list]').innerHTML = blocked.length
+        ? blocked.map((e) => episodeCard(e, 'blocked')).join('')
+        : '<p class="text-umber-100/70 italic">Nothing blocked. Nice.</p>';
+
+      $('[data-published-list]').innerHTML = published.length
+        ? published.map((e) => `
+            <div class="flex justify-between text-sm">
+              <span class="font-mono">${e.id}</span>
+              <span class="text-umber-100">${new Date(e.lastTransitionAt).toLocaleString()}</span>
+            </div>`).join('')
+        : '<p class="text-umber-100/70 italic">No published episodes yet.</p>';
+    }
+
+    function episodeCard(ep, kind) {
+      const dur = ep.durationSeconds ? `${Math.round(ep.durationSeconds / 60)}min` : '—';
+      const cost = ep.costSoFar != null ? `$${ep.costSoFar.toFixed(2)}` : '—';
+      const stateClass = kind === 'review' ? 'border-terracotta-500/40 bg-terracotta-500/5'
+        : kind === 'blocked' ? 'border-oxblood-500/40 bg-oxblood-500/5'
+        : 'border-umber-300/15 bg-parchment-50/40';
+      return `
+        <div class="border ${stateClass} p-5 flex justify-between items-start gap-4 flex-wrap">
+          <div class="min-w-0 flex-1">
+            <p class="smallcaps mb-1">${ep.state}</p>
+            <p class="font-display text-xl !text-umber-300 truncate">${ep.driveFilename || ep.id}</p>
+            <p class="font-mono text-xs text-umber-100 mt-1">${ep.id}</p>
+            <p class="text-sm text-umber-100 mt-1">${dur} · ${cost} · ${ep.lastTransitionAt ? new Date(ep.lastTransitionAt).toLocaleString() : ''}</p>
+            ${ep.errors?.length ? `<p class="text-sm text-oxblood-500 mt-2">Last error: ${ep.errors[ep.errors.length - 1].message}</p>` : ''}
+            ${ep.guard?.message ? `<p class="text-sm text-umber-100 mt-2"><em>${ep.guard.message}</em></p>` : ''}
+          </div>
+          ${kind === 'review' ? `
+            <button data-action="open-review" data-episode-id="${ep.id}" class="bg-umber-300 text-parchment-100 px-5 py-2.5 font-display text-lg hover:bg-terracotta-500 transition-colors">
+              Review
+            </button>` : ''}
+        </div>
+      `;
+    }
+
+    // ── Review view ──────────────────────────────────────────────────
+    async function openReview(episodeId) {
+      showView('loading');
+      const res = await fetch(`https://raw.githubusercontent.com/${repo}/${stateBranch}/episodes/${episodeId}.json`);
+      if (!res.ok) {
+        alert(`Could not load episode ${episodeId}`);
+        showView('queue');
+        return;
+      }
+      const ep = await res.json();
+      renderReview(ep);
+      showView('review');
+      window.location.hash = `episode=${episodeId}`;
+    }
+
+    function renderReview(ep) {
+      const enriched = ep.enriched || {};
+      const defaultCaption = enriched.pullQuotes?.[0]?.text
+        ? `"${enriched.pullQuotes[0].text}" — ${enriched.pullQuotes[0].speaker || 'guest'}\n\nNew episode of Doomer Optimism.`
+        : `New Doomer Optimism episode: ${ep.driveFilename || ep.id}`;
+      const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 16);
+
+      $('[data-review-content]').innerHTML = `
+        <div class="grid lg:grid-cols-[1fr_360px] gap-10">
+          <div class="min-w-0">
+            <p class="smallcaps mb-2">${ep.state}</p>
+            <h2 class="!text-3xl mb-4">${ep.driveFilename || ep.id}</h2>
+            <p class="font-mono text-xs text-umber-100 mb-6">${ep.id}</p>
+
+            <p class="smallcaps mb-2">Suggested summary</p>
+            <p class="font-serif text-lg text-umber-200 mb-8 whitespace-pre-line">${escape(enriched.summary || '(none)')}</p>
+
+            ${enriched.pullQuotes?.length ? `
+              <p class="smallcaps mb-2">Pull quotes</p>
+              <ul class="space-y-3 mb-8">
+                ${enriched.pullQuotes.map((q) => `
+                  <li class="border-l-2 border-terracotta-500/60 pl-4 italic text-umber-200">
+                    "${escape(q.text)}" <span class="not-italic text-umber-100 text-sm">— ${escape(q.speaker || '')}</span>
+                  </li>
+                `).join('')}
+              </ul>
+            ` : ''}
+
+            ${enriched.chapters?.length ? `
+              <p class="smallcaps mb-2">Chapters</p>
+              <ul class="space-y-1 mb-8">
+                ${enriched.chapters.map((c) => `<li><span class="font-mono text-sm text-umber-100">${formatTime(c.startSeconds)}</span> — ${escape(c.title)}</li>`).join('')}
+              </ul>
+            ` : ''}
+
+            ${enriched.bibliography?.length ? `
+              <p class="smallcaps mb-2">Bibliography (${enriched.bibliography.length})</p>
+              <ul class="space-y-1 mb-8 text-sm">
+                ${enriched.bibliography.map((b) => `<li>${escape(b.title)}${b.author ? ` — ${escape(b.author)}` : ''}${b.year ? ` (${b.year})` : ''}</li>`).join('')}
+              </ul>
+            ` : ''}
+
+            <p class="smallcaps mb-2">Suggested pillar</p>
+            <p class="mb-8"><span class="pillar-pill">${enriched.suggestedPillar || '(none)'}</span></p>
+
+            ${ep.enhancementNote ? `
+              <div class="border border-oxblood-500/40 bg-oxblood-500/5 p-3 mb-6 text-sm">
+                <strong>Audio enhancement:</strong> ${escape(ep.enhancementNote)}
+              </div>` : ''}
+          </div>
+
+          <aside class="space-y-6">
+            <div class="border border-umber-300/15 p-5 bg-parchment-50/60">
+              <p class="smallcaps mb-3">Schedule & approve</p>
+              <label class="block mb-3">
+                <span class="smallcaps">Caption</span>
+                <textarea id="caption-input" rows="6" class="w-full mt-1 p-3 border border-umber-300/20 bg-parchment-100 font-serif text-base">${escape(defaultCaption)}</textarea>
+              </label>
+              <label class="block mb-3">
+                <span class="smallcaps">First post at</span>
+                <input id="schedule-input" type="datetime-local" value="${tomorrow}" class="w-full mt-1 p-2 border border-umber-300/20 bg-parchment-100 font-mono">
+              </label>
+              <fieldset class="mb-4">
+                <legend class="smallcaps mb-2">Channels</legend>
+                <label class="block"><input type="checkbox" data-channel="instagram" checked> Instagram</label>
+                <label class="block"><input type="checkbox" data-channel="threads" checked> Threads</label>
+                <label class="block"><input type="checkbox" data-channel="twitter" checked> X / Twitter</label>
+                <label class="block"><input type="checkbox" data-channel="linkedin" checked> LinkedIn</label>
+              </fieldset>
+              <button id="approve-btn" class="w-full bg-terracotta-500 text-parchment-100 px-5 py-3 font-display text-lg hover:bg-terracotta-400 transition-colors">
+                Approve &amp; schedule
+              </button>
+              <button id="block-btn" class="w-full mt-2 border border-umber-300/30 px-5 py-2 hover:border-oxblood-500 hover:text-oxblood-500">
+                Block (needs more work)
+              </button>
+              <p id="approve-status" class="mt-3 text-sm"></p>
+            </div>
+
+            <div class="border border-umber-300/15 p-5 bg-parchment-50/60">
+              <p class="smallcaps mb-3">Cost so far</p>
+              <p class="font-display text-3xl text-umber-300">$${(ep.costSoFar || 0).toFixed(4)}</p>
+              ${ep.costs?.length ? `<ul class="text-sm text-umber-100 mt-2">
+                ${ep.costs.map((c) => `<li>${c.stage}: $${c.dollars.toFixed(4)}</li>`).join('')}
+              </ul>` : ''}
+            </div>
+
+            <div class="border border-umber-300/15 p-5 bg-parchment-50/60">
+              <p class="smallcaps mb-3">Artifacts</p>
+              <ul class="text-sm space-y-1">
+                ${(ep.artifacts || []).map((a) => `<li><span class="font-mono">${a.kind}</span>: ${a.ref.split('/').pop()}</li>`).join('') || '<li class="italic text-umber-100">none</li>'}
+              </ul>
+              <p class="text-xs text-umber-100/70 mt-3">
+                Artifacts live on the GHA workflow run and the pipeline-state branch.
+                Download via the Actions tab if needed.
+              </p>
+            </div>
+          </aside>
+        </div>
+      `;
+
+      $('#approve-btn').addEventListener('click', () => approveEpisode(ep));
+      $('#block-btn').addEventListener('click', () => blockEpisode(ep));
+    }
+
+    async function approveEpisode(ep) {
+      const caption = $('#caption-input').value.trim();
+      const scheduledAt = new Date($('#schedule-input').value).toISOString();
+      const channels = $$('input[data-channel]:checked').map((i) => i.dataset.channel).join(',');
+      if (!caption || !scheduledAt || !channels) {
+        $('#approve-status').textContent = 'Caption, time, and at least one channel are required.';
+        $('#approve-status').className = 'mt-3 text-sm text-oxblood-500';
+        return;
+      }
+      $('#approve-status').textContent = 'Dispatching publish workflow…';
+      $('#approve-status').className = 'mt-3 text-sm text-umber-100';
+      $('#approve-btn').disabled = true;
+      try {
+        const res = await gh(`/repos/${repo}/actions/workflows/${publishWorkflow}/dispatches`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            ref: 'main',
+            inputs: { episode_id: ep.id, caption, scheduled_at: scheduledAt, channels },
+          }),
+        });
+        if (res.status !== 204) throw new Error(`GitHub returned ${res.status}`);
+        $('#approve-status').textContent = '✓ Workflow dispatched. Posts will show up in Buffer within ~1 minute.';
+        $('#approve-status').className = 'mt-3 text-sm text-moss-500';
+        setTimeout(() => loadUserAndShowQueue(), 2000);
+      } catch (err) {
+        $('#approve-status').textContent = `Failed: ${err.message}`;
+        $('#approve-status').className = 'mt-3 text-sm text-oxblood-500';
+        $('#approve-btn').disabled = false;
+      }
+    }
+
+    async function blockEpisode(ep) {
+      // For now, surface as a manual instruction — direct state-edit from the
+      // browser would require a write path we haven't built. Easiest: open
+      // an issue. Future: a dedicated 'state-mutate' workflow.
+      const note = prompt('Reason for blocking?');
+      if (!note) return;
+      try {
+        await gh(`/repos/${repo}/issues`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            title: `Block ${ep.id}: ${note.slice(0, 60)}`,
+            body: `Blocked from /admin.\n\n**Reason:** ${note}\n\n**Episode:** ${ep.id}\n**State:** ${ep.state}`,
+            labels: ['pipeline-blocked'],
+          }),
+        });
+        alert('Issue created. The pipeline will pick this up on the next manual nudge.');
+        loadUserAndShowQueue();
+      } catch (err) {
+        alert(`Failed: ${err.message}`);
+      }
+    }
+
+    // ── Boot ─────────────────────────────────────────────────────────
+    async function loadUserAndShowQueue() {
+      showView('loading');
+      try {
+        const userRes = await gh('/user');
+        if (!userRes.ok) throw new Error(`Auth check failed: ${userRes.status}`);
+        const user = await userRes.json();
+        $('[data-user-name]').textContent = user.name || user.login;
+        localStorage.setItem(USER_KEY, user.login);
+        const [episodes, readiness] = await Promise.all([loadEpisodes(), loadReadiness()]);
+        renderReadiness(readiness);
+        renderQueue(episodes);
+        showView('queue');
+      } catch (err) {
+        console.error(err);
+        showView('login');
+        $('[data-error]').textContent = err.message;
+        $('[data-error]').classList.remove('hidden');
+      }
+    }
+
+    function escape(s) {
+      return String(s ?? '').replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c]);
+    }
+    function formatTime(s) {
+      s = Math.round(s || 0);
+      const m = Math.floor(s / 60);
+      return `${m}:${String(s % 60).padStart(2, '0')}`;
+    }
+
+    // Wire UI
+    $('[data-action="signin"]').addEventListener('click', startDeviceFlow);
+    $('[data-action="signout"]').addEventListener('click', () => {
+      clearToken();
+      showView('login');
+    });
+    $('[data-action="refresh"]').addEventListener('click', loadUserAndShowQueue);
+    $('[data-action="back-to-queue"]').addEventListener('click', () => {
+      window.location.hash = '';
+      loadUserAndShowQueue();
+    });
+
+    // Boot
+    if (getToken()) {
+      loadUserAndShowQueue();
+    } else {
+      showView('login');
+    }
+  </script>
+</BaseLayout>

@@ -1,8 +1,8 @@
 ---
 name: Patrick Lemmon
-role: Lead Voice — Traditional Construction
+role: Guest
 affiliation: Orthodox Masonry
-featured: true
+featured: false
 pillars:
   - built-environment
 bio: >-

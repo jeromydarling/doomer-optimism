@@ -1,0 +1,87 @@
+name: Pipeline · publish (Approve button)
+
+# Triggered when Ashley clicks "Approve" on /admin.
+#
+# The /admin page calls GitHub's REST API (workflow_dispatch) using her
+# OAuth token (one-click GH sign-in). This workflow is the only thing
+# that can transition an episode HUMAN_REVIEW → BUFFER_QUEUED → PUBLISHED.
+#
+# Stages:
+#   1. Re-verify state == HUMAN_REVIEW (refuse otherwise — stale request)
+#   2. Read Ashley's edits to caption/schedule from the dispatch inputs
+#   3. POST scheduled posts to Buffer (one per channel: IG, Threads, X, LinkedIn)
+#   4. Flip MDX `draft: false`, push to main
+#   5. Transition state → PUBLISHED
+
+on:
+  workflow_dispatch:
+    inputs:
+      episode_id:
+        description: 'Episode ID'
+        required: true
+      caption:
+        description: 'Approved social caption (Ashley-edited)'
+        required: true
+      scheduled_at:
+        description: 'ISO timestamp for first post (per-platform offsets calculated)'
+        required: true
+      channels:
+        description: 'Comma-separated channel IDs to post to'
+        required: false
+        default: 'instagram,threads,twitter,linkedin'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pipeline-publish-${{ github.event.inputs.episode_id }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish ${{ github.event.inputs.episode_id }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm install --no-audit --no-fund
+
+      - name: Configure git
+        run: |
+          git config user.name "pipeline-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Publish (Buffer + flip draft + state → PUBLISHED)
+        env:
+          EPISODE_ID: ${{ github.event.inputs.episode_id }}
+          CAPTION: ${{ github.event.inputs.caption }}
+          SCHEDULED_AT: ${{ github.event.inputs.scheduled_at }}
+          CHANNELS: ${{ github.event.inputs.channels }}
+          BUFFER_API_TOKEN: ${{ secrets.BUFFER_API_TOKEN }}
+        run: node scripts/pipeline/publish.mjs
+
+      - name: Final state flush (always)
+        if: always()
+        run: |
+          if [ -d .pipeline-state ]; then
+            cd .pipeline-state
+            git add .
+            if ! git diff --cached --quiet 2>/dev/null; then
+              git commit -m "Publish flush for ${{ github.event.inputs.episode_id }}" --quiet || true
+              for attempt in 1 2 3 4 5; do
+                if git push origin pipeline-state --quiet 2>/dev/null; then break; fi
+                git fetch origin pipeline-state --quiet || true
+                git rebase --autostash origin/pipeline-state --quiet || true
+                sleep $((attempt * 3))
+              done
+            fi
+          fi
