@@ -3,7 +3,6 @@ title: Tech-Limited Child-Rearing & Schooling
 shortTitle: Family & Schooling
 order: 6
 accent: terracotta
-leadVoice: Ashley Colby Fitzgerald
 blurb: >-
   Approaches to child rearing and education that limit screens, prioritize
   embodied learning, and reconnect children to land, craft, and place.

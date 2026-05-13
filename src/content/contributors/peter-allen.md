@@ -1,10 +1,12 @@
 ---
 name: Peter Allen
-role: Lead Voice — Regenerative Agriculture
+role: Ecologist & Regenerative Farmer
 affiliation: Mastodon Valley Farm
 featured: true
 pillars:
   - regenerative-agriculture
+links:
+  website: https://mastodonvalleyfarm.com
 bio: >-
   Ecologist, farm-school founder, and practitioner of keystone-species restoration.
   His work integrates oak-savanna ecology, holistic livestock management, and

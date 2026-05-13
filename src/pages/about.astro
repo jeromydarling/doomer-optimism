@@ -1,7 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { withBase, site } from '../lib/site';
-import PullQuote from '../components/PullQuote.astro';
 ---
 
 <BaseLayout title="About" description="Doomer Optimism is a pluralistic conversation about how to live well in the age of the Machine. Rooted in Catholic Social Teaching, ecumenical in its conversation, practical in its commitments.">
@@ -31,19 +30,14 @@ import PullQuote from '../components/PullQuote.astro';
       single tradition.
     </p>
 
-    <PullQuote attribution="The historic labor cry of bread and roses">
-      Material sufficiency <em>and</em> beauty.<br />Dignity, creativity, and rooted belonging.
-    </PullQuote>
-
     <h2 class="!text-3xl mt-16 mb-4">What we make</h2>
     <p class="text-lg leading-relaxed text-umber-200 mb-6">
-      Each main episode arrives with a full transcript, a categorized bibliography, and a
-      1,500–2,500 word companion essay — published here, on
-      <a href={site.social.substack}>Substack</a>, on
-      <a href={site.social.youtube}>YouTube</a>, and across the major podcast directories.
-      The site you are reading is the hub: it holds the searchable archive, the
-      bibliography across all episodes, and the long-form research library that turns
-      ephemeral conversations into a permanent reference.
+      Long-form conversations across the major podcast directories and
+      <a href={site.social.youtube}>YouTube</a>. A categorized
+      <a href={withBase('/library')}>research library</a> — the slow-built bibliography
+      across every episode. And, every so often, a long-form
+      <a href={site.social.substack}>companion essay</a> through Substack.
+      The site you are reading is the hub.
     </p>
 
     <h2 class="!text-3xl mt-16 mb-4">Six pillars</h2>
@@ -55,17 +49,7 @@ import PullQuote from '../components/PullQuote.astro';
       <a href={withBase('/pillars/technology-ai-transhumanism')}>technology &amp; AI</a>,
       <a href={withBase('/pillars/right-to-repair-surveillance')}>right to repair &amp; surveillance</a>, and
       <a href={withBase('/pillars/tech-limited-child-rearing')}>tech-limited child-rearing &amp; schooling</a>.
-      Each is anchored by a lead voice and grows its own slow-built reading list.
-    </p>
-
-    <h2 class="!text-3xl mt-16 mb-4">Where we're going</h2>
-    <p class="text-lg leading-relaxed text-umber-200 mb-6">
-      The next phase: a sustainable cadence of 30–40 episodes per year, the full
-      backfilled transcript archive, the launch of the categorized research library, and
-      a future think-tank arm that turns the network's collective wisdom into white
-      papers and policy briefs. We are moving toward a pattern that resembles the most
-      respected independent intellectual platforms — without losing the show's particular,
-      rooted voice.
+      Each grows its own slow-built reading list.
     </p>
 
     <h2 class="!text-3xl mt-16 mb-4">Brought to you by</h2>

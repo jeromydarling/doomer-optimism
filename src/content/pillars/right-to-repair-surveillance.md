@@ -3,7 +3,6 @@ title: Right to Repair & Surveillance
 shortTitle: Right to Repair
 order: 5
 accent: umber
-leadVoice: Gord Magill
 blurb: >-
   Defending worker autonomy, repairability, and freedom against corporate planned
   obsolescence and algorithmic control — advancing technological democracy and
