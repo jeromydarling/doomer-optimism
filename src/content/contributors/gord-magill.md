@@ -1,6 +1,6 @@
 ---
 name: Gord Magill
-role: Lead Voice — Right to Repair
+role: Writer & Right-to-Repair Advocate
 affiliation: Autonomous Truck(er)s
 featured: true
 pillars:

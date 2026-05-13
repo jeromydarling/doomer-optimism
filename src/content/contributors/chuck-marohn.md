@@ -1,8 +1,8 @@
 ---
 name: Chuck Marohn
-role: Lead Voice — Urbanism
+role: Guest
 affiliation: Strong Towns
-featured: true
+featured: false
 pillars:
   - built-environment
 links:

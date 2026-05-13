@@ -1,6 +1,6 @@
 ---
 name: James Pogue
-role: Lead Voice — Conservation & Environment
+role: Reporter & Essayist
 affiliation: Contributing writer, NYT Opinion · Vanity Fair · Harper's
 featured: true
 pillars:

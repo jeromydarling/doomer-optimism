@@ -3,7 +3,6 @@ title: Technology, AI & Transhumanism
 shortTitle: Tech & AI
 order: 4
 accent: oxblood
-leadVoice: Joe Allen
 blurb: >-
   Critiquing surveillance capitalism, automation's impact on labor, and the
   transhumanist erosion of embodied life — advocating convivial, democratic,

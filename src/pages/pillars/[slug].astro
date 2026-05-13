@@ -23,7 +23,6 @@ const articles = await getCollection('articles', (a) => a.data.pillar.slug === e
   <div class="container-wide pt-12 md:pt-20 pb-6">
     <p class="smallcaps mb-3">
       <a href={withBase('/pillars')} class="!border-b-0 hover:!text-terracotta-500">All pillars</a>
-      {entry.data.leadVoice && <><span class="mx-2 text-umber-100/50">·</span>Lead voice: {entry.data.leadVoice}</>}
     </p>
     <h1>{entry.data.title}</h1>
     <p class="font-serif text-xl text-umber-100 max-w-3xl mt-5">{entry.data.blurb}</p>

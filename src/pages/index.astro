@@ -6,7 +6,6 @@ import EpisodeCard from '../components/EpisodeCard.astro';
 import PillarCard from '../components/PillarCard.astro';
 import ContributorCard from '../components/ContributorCard.astro';
 import YouTubeEmbed from '../components/YouTubeEmbed.astro';
-import TrailerModal from '../components/TrailerModal.astro';
 import { withBase, site, excerpt } from '../lib/site';
 
 const allEpisodesIncludingDrafts = (await getCollection('episodes'))
@@ -37,89 +36,47 @@ const contributors = (await getCollection('contributors', (c) => c.data.featured
 <BaseLayout>
   <Hero />
 
-  {/*
-    Two-column band: site lede + CTAs on the LEFT, latest YouTube
-    episode on the RIGHT. The right column needs to read as "today's
-    dispatch", not as a description of the lede on its left — so the
-    video sits visually downstream. On mobile they stack: video first
-    (eyecatch), lede underneath. md+ shows them side-by-side.
-  */}
-  <section class="container-wide pt-8 md:pt-10 pb-4">
-    <div class={`grid gap-x-10 gap-y-8 items-center ${latestWithVideo ? 'md:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]' : ''}`}>
-      <div class="order-2 md:order-1 md:pr-2">
-        <p class="smallcaps mb-3">Episode 300 + a movement</p>
-        <p class="font-serif text-lg md:text-xl leading-relaxed text-umber-100 mb-6">
-          A pluralistic conversation with farmers, builders, repairers, scholars, and parents
-          building human-scale alternatives — clear-eyed about systemic fragility,
-          rooted in the practical work of bread and roses.
-        </p>
-        <div class="flex flex-wrap gap-3">
-          <a href={withBase('/episodes')} class="btn btn-primary">Listen to episodes</a>
-          <button
-            type="button"
-            class="btn"
-            data-trailer-open
-            aria-haspopup="dialog"
-            aria-controls="trailer-modal"
-          >
-            Watch the trailer
-          </button>
-        </div>
+  {latestWithVideo && (
+    <section class="container-wide pt-10 md:pt-14 pb-4">
+      <div class="flex items-baseline justify-between gap-4 mb-4">
+        <p class="smallcaps">Latest episode · No. {latestWithVideo.data.number}</p>
+        <a
+          href={withBase(`/episodes/${latestWithVideo.slug}`)}
+          class="smallcaps !text-[0.62rem] !border-b-0 hover:!text-terracotta-500 hidden sm:inline"
+        >
+          Episode notes →
+        </a>
       </div>
-
-      {latestWithVideo && (
-        <div class="order-1 md:order-2 md:border-l md:border-umber-300/20 md:pl-10">
-          <div class="flex items-baseline justify-between gap-4 mb-3">
-            <p class="smallcaps">Latest episode · No. {latestWithVideo.data.number}</p>
-            <a
-              href={withBase(`/episodes/${latestWithVideo.slug}`)}
-              class="smallcaps !text-[0.62rem] !border-b-0 hover:!text-terracotta-500 hidden sm:inline"
-            >
-              Episode notes →
-            </a>
+      <div class="grid md:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] gap-x-10 gap-y-6 items-start">
+        <YouTubeEmbed
+          videoId={latestWithVideo.data.youtubeId!}
+          title={latestWithVideo.data.title}
+        />
+        {latestWithVideo.data.summary && (
+          <div>
+            <h3 class="font-display text-2xl md:text-[1.75rem] text-umber-300 leading-snug mb-3">
+              <a
+                href={withBase(`/episodes/${latestWithVideo.slug}`)}
+                class="!border-b-0 hover:!text-terracotta-500"
+              >
+                {latestWithVideo.data.title}
+              </a>
+            </h3>
+            <p class="font-serif text-base md:text-[1.05rem] leading-relaxed text-umber-100">
+              {excerpt(latestWithVideo.data.summary, 280)}
+              {' '}
+              <a
+                href={withBase(`/episodes/${latestWithVideo.slug}`)}
+                class="smallcaps !text-[0.62rem] !border-b-0 hover:!text-terracotta-500 align-middle"
+              >
+                Read more →
+              </a>
+            </p>
           </div>
-          <YouTubeEmbed
-            videoId={latestWithVideo.data.youtubeId!}
-            title={latestWithVideo.data.title}
-          />
-
-          {/*
-            Auto-generated teaser from the Haiku-written summary in the
-            episode's frontmatter. Truncated to ~260 chars at a sentence
-            boundary. When a new episode lands via the auto-watcher, its
-            summary populates here automatically — no homepage edits.
-          */}
-          {latestWithVideo.data.summary && (
-            <div class="mt-4">
-              <h3 class="font-display text-2xl md:text-[1.75rem] text-umber-300 leading-snug mb-2">
-                <a
-                  href={withBase(`/episodes/${latestWithVideo.slug}`)}
-                  class="!border-b-0 hover:!text-terracotta-500"
-                >
-                  {latestWithVideo.data.title}
-                </a>
-              </h3>
-              <p class="font-serif text-base md:text-[1.05rem] leading-relaxed text-umber-100">
-                {excerpt(latestWithVideo.data.summary, 280)}
-                {' '}
-                <a
-                  href={withBase(`/episodes/${latestWithVideo.slug}`)}
-                  class="smallcaps !text-[0.62rem] !border-b-0 hover:!text-terracotta-500 align-middle"
-                >
-                  Read more →
-                </a>
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  </section>
-
-  <TrailerModal
-    videoUrl={site.promo.videoUrl}
-    posterUrl={site.promo.posterUrl}
-  />
+        )}
+      </div>
+    </section>
+  )}
 
   {featured && (
     <section class="container-wide pt-14 md:pt-20">
@@ -137,8 +94,8 @@ const contributors = (await getCollection('contributors', (c) => c.data.featured
         <a href={withBase('/pillars')} class="smallcaps !text-parchment-400 !border-b-0 hover:!text-terracotta-400 hidden sm:inline">All pillars →</a>
       </div>
       <p class="text-parchment-300/80 max-w-prose mb-10">
-        The conversation organizes around six interlocking domains. Each pillar has its own
-        lead voices, its own practitioners, and its own slow-built reading list.
+        The conversation organizes around six interlocking domains, each with its own
+        practitioners and slow-built reading list.
       </p>
       <div class="grid md:grid-cols-2 gap-3">
         {pillars.map((p) => (
@@ -166,9 +123,9 @@ const contributors = (await getCollection('contributors', (c) => c.data.featured
   <section class="container-wide pt-24">
     <h2 class="!text-3xl md:!text-4xl mb-2">Voices of the show</h2>
     <p class="text-umber-100 max-w-prose mb-10">
-      Hosts, lead voices, and recurring contributors. Each portrait is a hand-engraved
-      hedcut in the tradition of the Wall Street Journal — generated as placeholders
-      until the commissioned set is delivered.
+      Host and recurring contributors. Each portrait is a hand-engraved hedcut in the
+      tradition of the Wall Street Journal — generated as placeholders until the
+      commissioned set is delivered.
     </p>
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-8">
       {contributors.map((c) => <ContributorCard contributor={c} />)}
@@ -178,10 +135,10 @@ const contributors = (await getCollection('contributors', (c) => c.data.featured
   <section class="mt-24 bg-umber-300 border-y border-umber-400/40">
     <div class="container-wide py-16 md:py-24 text-center">
       <p class="smallcaps !text-parchment-400 mb-3">The Newsletter</p>
-      <h2 class="!text-3xl md:!text-4xl !text-parchment-100 mb-4 mx-auto max-w-2xl">Companion essays, every other Wednesday.</h2>
+      <h2 class="!text-3xl md:!text-4xl !text-parchment-100 mb-4 mx-auto max-w-2xl">Companion essays, when the moment calls for one.</h2>
       <p class="text-parchment-300/80 mx-auto mb-8 max-w-xl">
-        Each episode lands with a 1,500–2,500 word companion essay, a categorized
-        bibliography, and a full transcript — delivered to your inbox via Substack.
+        Every once in a while we'll release a long-form essay through Substack — a 1,500–2,500 word
+        deepening of an episode or a thread we keep returning to.
       </p>
       <a
         href={site.social.substack}
