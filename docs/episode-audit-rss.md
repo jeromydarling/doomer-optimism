@@ -1,44 +1,17 @@
 # Episode audit — cross-referenced against Anchor RSS
 
-Run: 2026-05-13T22:51:20.158Z
+Run: 2026-05-13T23:01:02.675Z
 
 **Total episodes:** 87
 
 | Verdict | Count | Meaning |
 |---|---|---|
-| clean | 34 | RSS, MDX, and transcript all agree. |
-| guest-haiku-error | 5 | RSS confirms MDX title, but the frontmatter `guest` field disagrees with the transcript. Safe to auto-fix: set `guest` to the transcript-detected name. |
+| clean | 37 | RSS, MDX, and transcript all agree. |
+| guest-haiku-error | 2 | RSS confirms MDX title, but the frontmatter `guest` field disagrees with the transcript. Safe to auto-fix: set `guest` to the transcript-detected name. |
 | no-rss-match | 11 | audioUrl is not in the current Anchor feed. May be a deleted episode, an Anchor URL change, or a stale link. |
 | unverifiable | 37 | RSS and MDX agree, but the transcript opening had no clear guest tag to verify against. No action needed unless content review reveals a problem. |
 
-## guest-haiku-error (5)
-
-### Ep 230 — `230-agriculture-for-the-people.mdx`
-
-- **MDX title:** Agriculture for the People
-- **RSS title:** DO 230 - Agriculture for the People
-- **MDX guest:** (none)
-- **Transcript guests:** Austin Frerich
-
-**Recommendation:** RSS title and MDX title agree. But frontmatter guest "(missing)" doesn't match transcript opening (Austin Frerich). **Recommend: set guest: "Austin Frerich".**
-
-### Ep 243 — `unnumbered-9561bb5f4416-d0-243-the-spiritual-quality-of-global-capitalism.mdx`
-
-- **MDX title:** D0 243 - The spiritual quality of global capitalism
-- **RSS title:** D0 243 - The spiritual quality of global capitalism
-- **MDX guest:** (none)
-- **Transcript guests:** Travis Logan, Matt Crawford
-
-**Recommendation:** RSS title and MDX title agree. But frontmatter guest "(missing)" doesn't match transcript opening (Travis Logan, Matt Crawford). **Recommend: set guest: "Travis Logan".**
-
-### Ep 256 — `256-political-agency-with-marie-gluesenkamp-perez-and-james.mdx`
-
-- **MDX title:** Political Agency with Marie Gluesenkamp Perez and James
-- **RSS title:** DO 256 - Political Agency with Marie Gluesenkamp Perez and James
-- **MDX guest:** Political Agency
-- **Transcript guests:** Marie Gluesenkamp Perez, John Lechner
-
-**Recommendation:** RSS title and MDX title agree. But frontmatter guest "Political Agency" doesn't match transcript opening (Marie Gluesenkamp Perez, John Lechner). **Recommend: set guest: "Marie Gluesenkamp Perez".**
+## guest-haiku-error (2)
 
 ### Ep 257 — `257-building-the-benedict-option-w-leah-sargeant-and-ashley.mdx`
 
