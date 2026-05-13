@@ -11,16 +11,19 @@ import { withBase, site, excerpt } from '../lib/site';
 const allEpisodesIncludingDrafts = (await getCollection('episodes'))
   .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
 const allEpisodes = allEpisodesIncludingDrafts.filter((e) => !e.data.draft);
-const featured = allEpisodes.find((e) => e.data.featured) ?? allEpisodes[0];
-const recent = allEpisodes.filter((e) => e.id !== featured.id).slice(0, 6);
-
 // Most recent published episode that has a YouTube ID set — used for
-// the homepage video band. Originally drafts qualified too (to surface
-// "what's airing on YouTube" early), but drafts ship with un-reviewed
-// Haiku summaries that frequently mis-attribute the guest as the host,
-// so we now wait for the draft flag to flip before featuring an
-// episode on the home page.
+// the homepage video band. Drafts are excluded because their Haiku-
+// generated summaries frequently mis-attribute the guest as the host.
 const latestWithVideo = allEpisodes.find((e) => e.data.youtubeId);
+
+// Featured episode: explicit `featured: true` only — no implicit fallback
+// to "most recent". Implicit fallbacks caused the homepage to feature a
+// scaffold placeholder when the real featured episode was deleted.
+const featured = allEpisodes.find((e) => e.data.featured);
+const recent = allEpisodes
+  .filter((e) => !featured || e.id !== featured.id)
+  .filter((e) => !latestWithVideo || e.id !== latestWithVideo.id)
+  .slice(0, 6);
 
 const pillars = (await getCollection('pillars')).sort((a, b) => a.data.order - b.data.order);
 const pillarCounts = Object.fromEntries(
