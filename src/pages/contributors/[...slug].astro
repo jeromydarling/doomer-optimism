@@ -16,9 +16,21 @@ const { Content } = await entry.render();
 const pillarRefs = entry.data.pillars ?? [];
 const pillars = await Promise.all(pillarRefs.map((p) => getEntry(p)));
 
-const allEpisodes = (await getCollection('episodes', (e) => !e.data.draft))
-  .filter((e) => e.data.guestSlug?.slug === entry.slug)
+// Ashley hosts every episode, so a "guest appearances" list is the wrong
+// frame for her page. For every other contributor, an appearance is any
+// published episode where either (a) the contributor's slug is set as the
+// guest reference, or (b) the contributor's name appears verbatim in the
+// episode title (panels and multi-guest episodes show up via this path).
+const isHost = entry.slug === 'ashley-colby-fitzgerald';
+const allPublished = (await getCollection('episodes', (e) => !e.data.draft))
   .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+const totalPublished = allPublished.length;
+const allEpisodes = isHost
+  ? []
+  : allPublished.filter(
+      (e) => e.data.guestSlug?.slug === entry.slug ||
+             (e.data.title && e.data.title.toLowerCase().includes(entry.data.name.toLowerCase())),
+    );
 ---
 
 <BaseLayout title={entry.data.name} description={entry.data.bio}>
@@ -72,13 +84,37 @@ const allEpisodes = (await getCollection('episodes', (e) => !e.data.draft))
     </div>
   </div>
 
-  {allEpisodes.length > 0 && (
+  {isHost && (
+    <section class="container-wide pb-24 pt-8 border-t border-umber-300/15">
+      <p class="smallcaps mb-3">Episodes</p>
+      <h2 class="!text-2xl mb-2">Hosts every conversation</h2>
+      <p class="text-umber-100 max-w-prose mb-6">
+        {totalPublished}+ published episodes, plus the archive still being
+        reviewed. <a href={withBase('/episodes')}>Browse all episodes →</a>
+      </p>
+    </section>
+  )}
+
+  {!isHost && allEpisodes.length > 0 && (
     <section class="container-wide pb-24 pt-8 border-t border-umber-300/15">
       <p class="smallcaps mb-3">Appearances</p>
       <h2 class="!text-2xl mb-6">{allEpisodes.length} episode{allEpisodes.length === 1 ? '' : 's'}</h2>
       <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-12">
-        {allEpisodes.map((e) => <EpisodeCard episode={e} />)}
+        {allEpisodes.slice(0, 24).map((e) => <EpisodeCard episode={e} />)}
       </div>
+      {allEpisodes.length > 24 && (
+        <p class="smallcaps mt-8"><a href={withBase('/episodes')}>… and {allEpisodes.length - 24} more →</a></p>
+      )}
+    </section>
+  )}
+
+  {!isHost && allEpisodes.length === 0 && (
+    <section class="container-wide pb-24 pt-8 border-t border-umber-300/15">
+      <p class="smallcaps mb-3">Appearances</p>
+      <p class="font-serif text-lg text-umber-100 italic max-w-prose">
+        No episodes in the public archive yet. As the backfill catches up, this
+        section will fill in automatically.
+      </p>
     </section>
   )}
 </BaseLayout>
