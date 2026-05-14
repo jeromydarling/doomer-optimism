@@ -168,7 +168,19 @@ for (const path of files) {
     const enriched = await callHaiku(transcript, fm);
 
     fm.summary = enriched.summary;
-    fm.bibliography = enriched.bibliography || [];
+    // Sanitize: Haiku emits `null` and empty strings for missing optional
+    // fields; the schema treats optional as missing-or-T (not nullable),
+    // and href must be a real URL. Strip both before saving.
+    fm.bibliography = (enriched.bibliography || []).map((entry) => {
+      const clean = {};
+      for (const [k, v] of Object.entries(entry)) {
+        if (v === null || v === undefined || v === '') continue;
+        if (k === 'href' && (typeof v !== 'string' || !/^https?:\/\//.test(v) || /\s/.test(v))) continue;
+        if (k === 'isbn' && /\s/.test(String(v))) continue;
+        clean[k] = v;
+      }
+      return clean;
+    });
     if (enriched.suggestedPillar && PILLAR_SLUGS.includes(enriched.suggestedPillar)) {
       fm.pillar = enriched.suggestedPillar;
     }
