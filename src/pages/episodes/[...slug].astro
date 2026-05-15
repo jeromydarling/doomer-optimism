@@ -16,6 +16,7 @@ const data = entry.data;
 const pillar = await getEntry(data.pillar);
 const secondary = data.secondaryPillar ? await getEntry(data.secondaryPillar) : null;
 const guest = data.guestSlug ? await getEntry(data.guestSlug) : null;
+const host = await getEntry('contributors', 'ashley-colby-fitzgerald');
 
 const articles = await getCollection('articles', (a) => a.data.episode?.slug === entry.slug);
 
@@ -24,43 +25,108 @@ const allEpisodes = (await getCollection('episodes', (e) => !e.data.draft))
 const idx = allEpisodes.findIndex((e) => e.id === entry.id);
 const prev = allEpisodes[idx + 1];
 const next = allEpisodes[idx - 1];
+
+// Subtitle: explicit `subtitle` field if set; else first sentence of the
+// summary. Matches The Sacred's italic-line-below-title pattern.
+const computedSubtitle =
+  data.subtitle ||
+  (data.summary?.match(/^[^.!?]+[.!?]/)?.[0] || '').trim() ||
+  '';
 ---
 
 <BaseLayout title={`Ep ${data.number} — ${data.title}`} description={data.summary} ogType="article">
   <article data-pagefind-body>
-    <div class="container-wide pt-10 md:pt-16 pb-6">
-      <p class="smallcaps mb-3">
+    {/*
+      Editorial hero — modeled after Substack's "The Sacred" pattern Ashley
+      shared. Title block sits ABOVE a wide hero image, with a small avatar
+      byline beneath the title. No YouTube screenshots — when a real edited
+      hero image isn't available we fall back to a typographic card.
+    */}
+    <header class="container-wide pt-10 md:pt-16 pb-2">
+      <p class="smallcaps mb-4">
         <a href={withBase('/episodes')} class="!border-b-0 hover:!text-terracotta-500">All episodes</a>
         <span class="mx-2 text-umber-100/50">·</span>
-        Episode {data.number} · {formatDate(data.pubDate)} · {formatDuration(data.durationSeconds)}
+        Episode {data.number}
       </p>
-      <h1 data-pagefind-meta="title" class="mb-4 max-w-4xl">{data.title}</h1>
-      {data.guest && (
-        <p class="font-serif text-xl text-umber-100 max-w-3xl">with <em>{data.guest}</em></p>
+      <h1
+        data-pagefind-meta="title"
+        class="!text-[clamp(2.25rem,5vw,4rem)] !leading-[1.05] mb-5 max-w-4xl !text-umber-300"
+      >
+        {data.title}
+      </h1>
+      {computedSubtitle && (
+        <p class="font-serif italic text-xl md:text-2xl text-umber-100 max-w-3xl leading-snug mb-7">
+          {computedSubtitle}
+        </p>
       )}
-      {/*
-        Hidden Pagefind meta — captured for the search index but not
-        visible in the page itself. (Pagefind reads the element's
-        `data-pagefind-meta` attribute and indexes its text content.)
-      */}
+
+      {/* Byline row — small hedcut + caption + date + Listen button */}
+      <div class="flex items-center gap-3 flex-wrap mb-6">
+        <a
+          href={withBase(`/contributors/${host.slug}`)}
+          class="!border-b-0 flex items-center gap-3 group"
+        >
+          <div class="w-10 h-10 rounded-full overflow-hidden bg-parchment-200 shrink-0">
+            {host.data.portrait ? (
+              <img src={withBase(host.data.portrait)} alt={`Portrait of ${host.data.name}`} width="40" height="40" class="w-full h-full object-cover" />
+            ) : (
+              <HedcutPlaceholder name={host.data.name} size={40} />
+            )}
+          </div>
+          <div>
+            <p class="smallcaps !text-[0.66rem] !text-terracotta-500 leading-none mb-0.5">Doomer Optimism</p>
+            <p class="text-sm text-umber-200 leading-tight">{formatDate(data.pubDate)} · {formatDuration(data.durationSeconds)}</p>
+          </div>
+        </a>
+        {data.youtubeId && (
+          <a
+            href={`https://www.youtube.com/watch?v=${data.youtubeId}`}
+            class="btn !py-1.5 !px-3 !text-[0.7rem] !tracking-[0.14em] ml-auto"
+          >
+            Listen
+          </a>
+        )}
+      </div>
+
       {data.guest && <span data-pagefind-meta="guest" style="display:none">{data.guest}</span>}
       <span data-pagefind-meta="number" style="display:none">{String(data.number)}</span>
       <span data-pagefind-meta="pillar" style="display:none">{pillar.data.title}</span>
-      <div class="mt-5 flex flex-wrap gap-2" data-pagefind-filter={`pillar:${pillar.data.title}`}>
-        <a href={withBase(`/pillars/${pillar.slug}`)} class="pillar-pill !border-b-0 hover:!border-terracotta-500/60">{pillar.data.title}</a>
-        {secondary && <a href={withBase(`/pillars/${secondary.slug}`)} class="pillar-pill !border-b-0 hover:!border-terracotta-500/60">{secondary.data.title}</a>}
-      </div>
-    </div>
+    </header>
 
-    <div class="container-wide grid md:grid-cols-[1fr_320px] gap-12 pt-6 pb-20">
-      <div class="min-w-0">
-        <div class="aspect-video bg-parchment-200/70 border border-umber-300/20 mb-10 flex items-center justify-center relative overflow-hidden">
+    {/* Hero image / placeholder card */}
+    <div class="container-wide pb-10">
+      {data.heroImage ? (
+        <figure class="m-0">
+          <img
+            src={withBase(data.heroImage)}
+            alt={`Hero image for episode ${data.number}: ${data.title}`}
+            class="w-full h-auto block"
+            width="1600"
+            height="900"
+          />
+          {data.heroImageCredit && (
+            <figcaption class="smallcaps mt-2 !text-[0.62rem] text-umber-100/70">
+              {data.heroImageCredit}
+            </figcaption>
+          )}
+        </figure>
+      ) : (
+        <div class="aspect-[16/9] bg-parchment-200/70 border border-umber-300/20 flex items-center justify-center relative overflow-hidden">
           <div class="absolute inset-0 bg-gradient-to-br from-terracotta-500/10 via-transparent to-moss-500/10"></div>
           <div class="text-center px-8 relative">
-            <p class="smallcaps mb-2">Doomer Optimism · {String(data.number).padStart(3, '0')}</p>
+            <p class="smallcaps mb-3">Doomer Optimism · {String(data.number).padStart(3, '0')}</p>
             <p class="font-display text-3xl md:text-5xl text-umber-300 max-w-2xl">{data.title}</p>
-            <p class="smallcaps mt-3">with {data.guest}</p>
+            {data.guest && <p class="smallcaps mt-4">with {data.guest}</p>}
           </div>
+        </div>
+      )}
+    </div>
+
+    <div class="container-wide grid md:grid-cols-[1fr_320px] gap-12 pb-20">
+      <div class="min-w-0">
+        <div class="mt-1 mb-8 flex flex-wrap gap-2" data-pagefind-filter={`pillar:${pillar.data.title}`}>
+          <a href={withBase(`/pillars/${pillar.slug}`)} class="pillar-pill !border-b-0 hover:!border-terracotta-500/60">{pillar.data.title}</a>
+          {secondary && <a href={withBase(`/pillars/${secondary.slug}`)} class="pillar-pill !border-b-0 hover:!border-terracotta-500/60">{secondary.data.title}</a>}
         </div>
 
         <div class="prose-content max-w-none">
