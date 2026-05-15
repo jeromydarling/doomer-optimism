@@ -53,10 +53,22 @@ const contributors = (await getCollection('contributors', (c) => c.data.featured
         </a>
       </div>
       <div class="grid md:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] gap-x-10 gap-y-6 items-start">
-        <YouTubeEmbed
-          videoId={latestWithVideo.data.youtubeId!}
-          title={latestWithVideo.data.title}
-        />
+        {latestWithVideo.data.heroImage ? (
+          <a href={withBase(`/episodes/${latestWithVideo.slug}`)} class="!border-b-0 block group">
+            <img
+              src={withBase(latestWithVideo.data.heroImage)}
+              alt={`Hero image for episode ${latestWithVideo.data.number}: ${latestWithVideo.data.title}`}
+              class="w-full h-auto block group-hover:opacity-95 transition-opacity"
+              width="1600"
+              height="900"
+            />
+          </a>
+        ) : (
+          <YouTubeEmbed
+            videoId={latestWithVideo.data.youtubeId!}
+            title={latestWithVideo.data.title}
+          />
+        )}
         {latestWithVideo.data.summary && (
           <div>
             <h3 class="font-display text-2xl md:text-[1.75rem] text-umber-300 leading-snug mb-3">

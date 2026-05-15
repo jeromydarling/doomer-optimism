@@ -39,6 +39,9 @@ const episodes = defineCollection({
   schema: z.object({
     number: z.number(),
     title: z.string(),
+    // Optional editorial subtitle (italic line below the title in the
+    // hero). Falls back to the first sentence of the summary if missing.
+    subtitle: z.string().optional(),
     // Guest is optional because panel/solo episodes don't have a single
     // identifiable guest, and the bot pipeline omits the field rather than
     // writing a "Speaker B" sentinel.
@@ -49,6 +52,12 @@ const episodes = defineCollection({
     pillar: reference('pillars'),
     secondaryPillar: reference('pillars').optional(),
     summary: z.string(),
+    // Editorial hero image — a properly-edited two-shot of host + guest
+    // (NOT a YouTube screenshot). Path relative to the site base. When
+    // set, replaces the placeholder card on the episode detail page and
+    // is used as the homepage "latest" card's image.
+    heroImage: z.string().optional(),
+    heroImageCredit: z.string().optional(),
     youtubeId: z.string().optional(),
     audioUrl: z.string().url().optional(),
     substackUrl: z.string().url().optional(),
