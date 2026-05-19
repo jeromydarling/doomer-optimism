@@ -1,7 +1,7 @@
 ---
-title: "Luma 2026"
-location: "with the Savage Collective and the Bruderhof"
-startDate: 2026-07-01
+title: "with the Savage Collective & the Bruderhof"
+location: "Bruderhof community"
+startDate: 2026-07-10
 status: upcoming
 summary: >-
   A gathering with the Savage Collective and the Bruderhof community on

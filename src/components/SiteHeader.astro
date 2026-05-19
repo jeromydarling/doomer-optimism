@@ -1,11 +1,14 @@
 ---
 import { withBase } from '../lib/site';
 
+// Note: /contributors is intentionally not in the main nav — Ashley wants
+// to confirm each contributor's role and recurrence before featuring the
+// page. Individual contributor pages remain reachable from episode pages,
+// the page just isn't promoted in the nav until she signs off.
 const links = [
   { href: '/episodes', label: 'Episodes' },
   { href: '/pillars', label: 'Pillars' },
   { href: '/library', label: 'Library' },
-  { href: '/contributors', label: 'Contributors' },
   { href: '/events', label: 'Events' },
   { href: '/about', label: 'About' },
 ];
