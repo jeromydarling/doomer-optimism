@@ -16,7 +16,11 @@ const data = entry.data;
 const pillar = await getEntry(data.pillar);
 const secondary = data.secondaryPillar ? await getEntry(data.secondaryPillar) : null;
 const guest = data.guestSlug ? await getEntry(data.guestSlug) : null;
-const host = await getEntry('contributors', 'ashley-colby-fitzgerald');
+// Host is Ashley by default; episodes can override with `host: "Jason Snyder"`
+// (or whoever ran the interview). We try to resolve to a contributor record
+// for the avatar, otherwise fall back to a procedural hedcut from the name.
+const hostName = data.host || 'Ashley Colby Fitzgerald';
+const hostContributor = await getEntry('contributors', hostName.toLowerCase().replace(/[^a-z0-9]+/g, '-')).catch(() => null);
 
 const articles = await getCollection('articles', (a) => a.data.episode?.slug === entry.slug);
 
@@ -62,22 +66,31 @@ const computedSubtitle =
 
       {/* Byline row — small hedcut + caption + date + Listen button */}
       <div class="flex items-center gap-3 flex-wrap mb-6">
-        <a
-          href={withBase(`/contributors/${host.slug}`)}
-          class="!border-b-0 flex items-center gap-3 group"
-        >
-          <div class="w-10 h-10 rounded-full overflow-hidden bg-parchment-200 shrink-0">
-            {host.data.portrait ? (
-              <img src={withBase(host.data.portrait)} alt={`Portrait of ${host.data.name}`} width="40" height="40" class="w-full h-full object-cover" />
-            ) : (
-              <HedcutPlaceholder name={host.data.name} size={40} />
-            )}
+        {hostContributor ? (
+          <a href={withBase(`/contributors/${hostContributor.slug}`)} class="!border-b-0 flex items-center gap-3 group">
+            <div class="w-10 h-10 rounded-full overflow-hidden bg-parchment-200 shrink-0">
+              {hostContributor.data.portrait ? (
+                <img src={withBase(hostContributor.data.portrait)} alt={`Portrait of ${hostContributor.data.name}`} width="40" height="40" class="w-full h-full object-cover" />
+              ) : (
+                <HedcutPlaceholder name={hostContributor.data.name} size={40} />
+              )}
+            </div>
+            <div>
+              <p class="smallcaps !text-[0.66rem] !text-terracotta-500 leading-none mb-0.5">{hostContributor.data.name}</p>
+              <p class="text-sm text-umber-200 leading-tight">{formatDate(data.pubDate)} · {formatDuration(data.durationSeconds)}</p>
+            </div>
+          </a>
+        ) : (
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full overflow-hidden bg-parchment-200 shrink-0">
+              <HedcutPlaceholder name={hostName} size={40} />
+            </div>
+            <div>
+              <p class="smallcaps !text-[0.66rem] !text-terracotta-500 leading-none mb-0.5">{hostName}</p>
+              <p class="text-sm text-umber-200 leading-tight">{formatDate(data.pubDate)} · {formatDuration(data.durationSeconds)}</p>
+            </div>
           </div>
-          <div>
-            <p class="smallcaps !text-[0.66rem] !text-terracotta-500 leading-none mb-0.5">Doomer Optimism</p>
-            <p class="text-sm text-umber-200 leading-tight">{formatDate(data.pubDate)} · {formatDuration(data.durationSeconds)}</p>
-          </div>
-        </a>
+        )}
         {data.youtubeId && (
           <a
             href={`https://www.youtube.com/watch?v=${data.youtubeId}`}

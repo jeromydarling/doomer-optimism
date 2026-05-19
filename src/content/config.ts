@@ -42,6 +42,9 @@ const episodes = defineCollection({
     // Optional editorial subtitle (italic line below the title in the
     // hero). Falls back to the first sentence of the summary if missing.
     subtitle: z.string().optional(),
+    // Host of the episode. Defaults to Ashley Colby Fitzgerald; set this
+    // explicitly when someone else (e.g. Jason Snyder) ran the interview.
+    host: z.string().optional(),
     // Guest is optional because panel/solo episodes don't have a single
     // identifiable guest, and the bot pipeline omits the field rather than
     // writing a "Speaker B" sentinel.
