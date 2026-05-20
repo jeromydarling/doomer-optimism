@@ -75,6 +75,19 @@ duration in the past — these rules exist to prevent that):
 - The LAST chapter should start no later than (duration - 120) seconds.
 - If you're unsure about a timestamp, prefer fewer chapters over inventing one.
 
+CRITICAL grounding rules — the transcript is the ONLY source of truth:
+- Every person's name, organization, book title, year, and URL in the
+  summary or bibliography MUST appear verbatim in the transcript.
+  Don't supplement from outside knowledge. Examples of recent misses:
+  - Guest said "Pope Leo's encyclical" → bibliography author is Pope Leo,
+    NOT Pope Francis (regardless of who you remember as the Pope).
+  - Guest mentioned a book without a year → leave year null. Don't infer.
+  - Guest mentioned an organization without a URL → leave href null.
+- If a detail (year, ISBN, URL, middle name, affiliation) isn't stated
+  in the transcript, omit the field entirely. Empty/null is correct.
+- Spell guest and author names exactly as they appear in the transcript's
+  speaker tags or in the guest's own self-introduction.
+
 Output STRICT JSON only — no prose, no markdown fences:
 
 {
