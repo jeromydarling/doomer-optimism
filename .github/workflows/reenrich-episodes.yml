@@ -13,6 +13,9 @@ on:
     paths:
       - 'scripts/reenrich-mdx.mjs'
       - '.github/workflows/reenrich-episodes.yml'
+      # Auto-fire when a new episode MDX lands so [Pending re-enrichment]
+      # placeholders get filled in without needing a manual workflow run.
+      - 'src/content/episodes/**.mdx'
 
 permissions:
   contents: write
