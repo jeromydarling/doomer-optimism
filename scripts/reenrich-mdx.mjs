@@ -52,30 +52,41 @@ async function callHaiku(transcript, fm) {
 
 Episode title: ${fm.title}
 Guest (per Anchor RSS): ${fm.guest || '(unspecified)'}
-Pillar: ${fm.pillar}
+Pillar (currently set): ${fm.pillar}
+Episode duration: ${fm.durationSeconds || '(unknown)'} seconds${fm.durationSeconds ? ` (${Math.floor(fm.durationSeconds / 60)}:${String(fm.durationSeconds % 60).padStart(2, '0')})` : ''}
 
-Pillars (pick the most accurate, may differ from the one set):
+Pillars available (pick the most accurate primary; only set a secondary when the
+episode genuinely spans two pillars at roughly equal weight — DO NOT add a
+secondary pillar just because one was briefly mentioned):
 ${PILLAR_SLUGS.map((p) => `  - ${p}`).join('\n')}
 
-Important: write the summary in GUEST-CENTRIC voice. Don't say "Ashley
+Voice: write the summary in GUEST-CENTRIC voice. Don't say "Ashley
 explores X" or "Ashley journeys to Y" — Ashley is the host, not the
 protagonist. The substantive content is the GUEST's work, perspective,
 journey. If multiple guests, name them; if the episode is a panel of
 internal hosts (e.g. "with Ashley, Jason, and James") describe what
 the panel covers.
 
+CRITICAL chapter rules (Haiku has hallucinated past the actual episode
+duration in the past — these rules exist to prevent that):
+- Every chapter's startSeconds MUST be < the episode duration above.
+- Chapters are sequential; each startSeconds must be > the previous one.
+- 6-12 chapters total is the right density for a 30-90 minute episode.
+- The LAST chapter should start no later than (duration - 120) seconds.
+- If you're unsure about a timestamp, prefer fewer chapters over inventing one.
+
 Output STRICT JSON only — no prose, no markdown fences:
 
 {
   "summary": "2-3 paragraphs, editorial voice, guest-centric",
-  "chapters": [{ "startSeconds": <int>, "title": "<title>" }, ...],
+  "chapters": [{ "startSeconds": <int, less than episode duration>, "title": "<title>" }, ...],
   "topics": ["topic 1", "topic 2", ...],
   "bibliography": [
     { "title": "...", "author": "...", "year": <int|null>, "kind": "book|article|paper|film|podcast|site", "isbn": "...", "href": "..." }
   ],
   "pullQuotes": [{ "speaker": "<name>", "text": "..." }, ...],
   "suggestedPillar": "<pillar slug from list above>",
-  "suggestedSecondaryPillar": "<pillar slug or null>"
+  "suggestedSecondaryPillar": "<pillar slug or null — leave null if the secondary fit is weak>"
 }
 
 Transcript follows. (Speaker tags removed; this is plain prose.)
@@ -166,6 +177,25 @@ for (const path of files) {
     }
 
     const enriched = await callHaiku(transcript, fm);
+
+    // Belt-and-suspenders chapter validation: even with the explicit
+    // duration constraint in the prompt, Haiku has been seen to drift
+    // past the actual episode length. Drop any chapter past duration.
+    if (Array.isArray(enriched.chapters) && fm.durationSeconds) {
+      const before = enriched.chapters.length;
+      enriched.chapters = enriched.chapters
+        .filter((c) => Number(c.startSeconds) < fm.durationSeconds - 30)
+        .sort((a, b) => Number(a.startSeconds) - Number(b.startSeconds));
+      if (enriched.chapters.length < before) {
+        console.log(`    (clamped ${before - enriched.chapters.length} chapter(s) past episode duration ${fm.durationSeconds}s)`);
+      }
+    }
+    // Guard against weak secondary-pillar assignments — Haiku occasionally
+    // labels something tangentially related (e.g. one mention of a farm)
+    // as a secondary pillar. If the suggestion matches the primary, drop.
+    if (enriched.suggestedSecondaryPillar === enriched.suggestedPillar) {
+      enriched.suggestedSecondaryPillar = null;
+    }
 
     fm.summary = enriched.summary;
     // Sanitize: Haiku emits `null` and empty strings for missing optional
