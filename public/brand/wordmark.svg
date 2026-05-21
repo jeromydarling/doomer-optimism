@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="600" viewBox="0 0 2400 600">
+  
+  <text x="1200" y="384" text-anchor="middle"
+        font-family="Cormorant Garamond"
+        font-size="276"
+        fill="#2a2117"
+        font-weight="500"
+        letter-spacing="-2">Doomer<tspan
+          font-style="italic" font-weight="400"
+          fill="#a6582c"
+          dx="33"
+        >Optimism</tspan></text>
+</svg>
