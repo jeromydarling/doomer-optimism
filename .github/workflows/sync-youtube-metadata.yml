@@ -21,6 +21,13 @@ on:
         description: "Comma-separated episode numbers to limit to (blank = all)"
         required: false
         default: ''
+  push:
+    # Auto-fire when the sync script or this workflow is updated, so
+    # touching either is enough to re-sync — Claude Code in the cloud
+    # sandbox can't call the workflow_dispatch endpoint directly.
+    paths:
+      - 'scripts/sync-youtube-metadata.mjs'
+      - '.github/workflows/sync-youtube-metadata.yml'
 
 permissions:
   contents: write
