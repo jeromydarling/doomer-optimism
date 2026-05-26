@@ -49,11 +49,30 @@ jobs:
 
       - run: npm install --no-audit --no-fund
 
-      - name: Run sync
+      - name: Sanity-check env + write log header
+        run: |
+          mkdir -p docs/runs
+          LOG=docs/runs/sync-youtube-last-run.log
+          {
+            echo "=== sync-youtube run @ $(date -u +%FT%TZ) ==="
+            echo "trigger: ${{ github.event_name }}"
+            echo "sha: ${{ github.sha }}"
+            echo "ref: ${{ github.ref_name }}"
+            echo "node: $(node -v)"
+            echo "npm: $(npm -v)"
+            echo "YOUTUBE_CHANNEL_ID set: $([ -n "${{ vars.YOUTUBE_CHANNEL_ID }}" ] && echo yes || echo NO)"
+            echo "YOUTUBE_API_KEY set: $([ -n "${{ secrets.YOUTUBE_API_KEY }}" ] && echo yes || echo NO)"
+            echo "episode file count before: $(find src/content/episodes -name '*.mdx' | wc -l)"
+          } > "$LOG"
+          cat "$LOG"
+
+      - name: Run sync (logging to file)
+        id: run_sync
         env:
           YOUTUBE_CHANNEL_ID: ${{ vars.YOUTUBE_CHANNEL_ID }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
         run: |
+          LOG=docs/runs/sync-youtube-last-run.log
           ARGS=""
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
             ARGS="$ARGS --dry-run"
@@ -61,16 +80,23 @@ jobs:
           if [ -n "${{ github.event.inputs.only }}" ]; then
             ARGS="$ARGS --only=${{ github.event.inputs.only }}"
           fi
-          node scripts/sync-youtube-metadata.mjs $ARGS
+          echo "--- script output (args:$ARGS) ---" >> "$LOG"
+          set +e
+          node scripts/sync-youtube-metadata.mjs $ARGS 2>&1 | tee -a "$LOG"
+          STATUS=${PIPESTATUS[0]}
+          set -e
+          echo "--- exit status: $STATUS ---" >> "$LOG"
+          echo "episode file count after: $(find src/content/episodes -name '*.mdx' | wc -l)" >> "$LOG"
+          exit $STATUS
 
-      - name: Commit changes back
-        if: github.event.inputs.dry_run != 'true'
+      - name: Commit log + changes back
+        if: always() && github.event.inputs.dry_run != 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/content/episodes/
+          git add docs/runs/sync-youtube-last-run.log src/content/episodes/ || true
           if ! git diff --cached --quiet; then
-            git commit -m "Sync episode titles + descriptions from YouTube"
+            git commit -m "Sync episode titles + descriptions from YouTube (+ run log)"
             for attempt in 1 2 3 4 5; do
               if git push origin HEAD:${{ github.ref_name }} 2>&1 | head -3; then break; fi
               git fetch origin ${{ github.ref_name }} --quiet || true
