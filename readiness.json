@@ -10,14 +10,14 @@
     {
       "name": "anthropic",
       "ok": true,
-      "ms": 746,
+      "ms": 2749,
       "healthy": true,
       "note": "Auth OK; no balance endpoint exists."
     },
     {
       "name": "drive-oauth",
       "ok": true,
-      "ms": 252,
+      "ms": 265,
       "healthy": true,
       "expiresIn": 3599,
       "note": "Refresh token valid."
@@ -25,20 +25,20 @@
     {
       "name": "buffer",
       "ok": true,
-      "ms": 163,
+      "ms": 169,
       "healthy": false,
       "note": "BUFFER_API_TOKEN not set."
     },
     {
       "name": "ffmpeg",
       "ok": false,
-      "ms": 163,
+      "ms": 169,
       "error": "ffmpeg not on PATH"
     },
     {
       "name": "disk",
       "ok": true,
-      "ms": 160,
+      "ms": 167,
       "healthy": true,
       "availGb": 89,
       "minGb": 10,
@@ -62,7 +62,7 @@
     {
       "name": "episodes-dir",
       "ok": true,
-      "ms": 1,
+      "ms": 2,
       "healthy": true,
       "note": "Writable."
     }
@@ -72,5 +72,5 @@
     "buffer",
     "ffmpeg"
   ],
-  "at": "2026-06-07T09:26:53.422Z"
+  "at": "2026-06-07T11:00:10.481Z"
 }
