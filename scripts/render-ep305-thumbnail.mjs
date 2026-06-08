@@ -20,11 +20,12 @@ const OUT_DIR = '/home/user/doomer-optimism/public/episodes/305';
 const W = 1280, H = 720;
 
 // ---- 1. clean the screenshot ---------------------------------------------------
-// Source: 1179 × 2556 iOS screenshot. Crop tight on the two figures —
-// Patrick standing (head ~y=720, feet ~y=1450) and Seth sitting on the stone
-// step (head ~y=1450, feet ~y=1850). Tight box: x=260..900, y=640..1900.
+// Source: 1179 × 2556 iOS screenshot. Pull a big square pre-crop centered on
+// both figures — Patrick standing (head ~y=720) + Seth sitting (feet ~y=1850).
+// Midpoint x≈565, midpoint y≈1285. A 1100×1100 square keeps both fully in
+// frame with some brick context around them.
 const photoSrc = await sharp(SRC)
-  .extract({ left: 260, top: 640, width: 640, height: 1260 })
+  .extract({ left: 15, top: 735, width: 1100, height: 1100 })
   .toBuffer();
 
 await mkdir(OUT_DIR, { recursive: true });
@@ -38,14 +39,13 @@ await sharp(photoSrc).jpeg({ quality: 88 }).toFile(join(OUT_DIR, 'guests.jpg'));
 // and Seth sitting on the step (orig y≈1100..1450). Scaled positions:
 //   Patrick: 326..597    Seth: 597..787 (of 757 total).
 // Bias the crop hard to the bottom so Seth doesn't get cut off.
-// Scale the photo by HEIGHT — no cropping. The full source is shown, both
-// figures intact. The resulting pane is narrower than half the thumbnail,
-// which is fine — the wide text block balances it.
+// Resize the square pre-crop to fill the right half of the thumbnail.
+// 720×720 square pane = full thumbnail height, takes 56% of the width;
+// text panel is 560×720, plenty of room for the title.
+const RIGHT_W = 720;
 const photoPane = await sharp(photoSrc)
-  .resize({ height: H })  // height-fit, no extract; full image preserved
+  .resize({ width: RIGHT_W, height: H })
   .toBuffer();
-const photoMeta = await sharp(photoPane).metadata();
-const RIGHT_W = photoMeta.width;
 
 // ---- 3. SVG text overlay (matches the 304 thumbnail visual language) ----------
 const INK = '#1a140e';
