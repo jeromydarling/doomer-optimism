@@ -2,13 +2,17 @@
 /**
  * scripts/render-ep305-thumbnail.mjs
  *
- * One-off: crop the iOS screenshot of Patrick + Seth in front of their brick
- * arch, then composite a 1280×720 YouTube thumbnail in the same shape as
- * Ashley's ep 304 thumbnail (dark ground, terracotta title, photo right).
+ * YouTube thumbnail for ep 305 (Patrick Lemmon + Seth Harris / Orthodox
+ * Masonry). The source is an iOS screenshot of a portrait photo: Patrick
+ * stands inside the brick arch, Seth sits on the step to his right. Both
+ * are guests — both must be visible in the thumbnail.
+ *
+ * Layout: photo on the right (640×720) with both figures in frame, text
+ * block on the left, matching ep 304's style.
  */
 
 import sharp from 'sharp';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const SRC = '/root/.claude/uploads/3678a490-aea1-58e9-a311-723eff63b0d0/51dec415-1000012851.png';
@@ -16,34 +20,39 @@ const OUT_DIR = '/home/user/doomer-optimism/public/episodes/305';
 const W = 1280, H = 720;
 
 // ---- 1. clean the screenshot ---------------------------------------------------
-// Source is 1179 × 2556 (iOS screenshot). The brick-wall photo content runs
-// y=110..1505. Patrick stands in the arch (face ~y=700), Seth sits to his
-// right (face ~y=1130). Crop tight to a box that includes both faces + a
-// bit of the surrounding arch.
+// Source: 1179 × 2556 iOS screenshot. The brick-wall photo runs y≈110..1900.
+// Patrick stands in the arch (head ~y=720, feet ~y=1450). Seth sits on the
+// stone step to his right (head ~y=1450, feet ~y=1850). Keep the full photo
+// so both figures are inside the frame.
 const photoSrc = await sharp(SRC)
-  .extract({ left: 200, top: 580, width: 800, height: 920 })
+  .extract({ left: 0, top: 110, width: 1179, height: 1790 })
   .toBuffer();
 
 await mkdir(OUT_DIR, { recursive: true });
 await sharp(photoSrc).jpeg({ quality: 88 }).toFile(join(OUT_DIR, 'guests.jpg'));
 
-// ---- 2. thumbnail compose ------------------------------------------------------
-// Right half = photo cropped to focus on the arch + people.
-// The cleaned photo is 1179 × ~1530 (portrait). For the thumbnail's right pane
-// (~640 × 720), we crop a portrait slice centered on the figures.
-// Pre-crop is already tight around both faces; centre fit will frame them.
-const RIGHT_W = 640;
+// ---- 2. right-pane photo crop --------------------------------------------------
+// Photo is portrait (1179 × 1395, aspect 0.85). The right pane is 640 × 720
+// (aspect 0.89). Sharp's cover fit scales by width (factor 0.543), giving an
+// intermediate 640 × 758. We need to crop 38px of height. Use a numerical
+// `top:` offset that keeps both figures: Patrick standing (orig y≈600..1100)
+// and Seth sitting on the step (orig y≈1100..1450). Scaled positions:
+//   Patrick: 326..597    Seth: 597..787 (of 757 total).
+// Bias the crop hard to the bottom so Seth doesn't get cut off.
+// Scale the photo by HEIGHT — no cropping. The full source is shown, both
+// figures intact. The resulting pane is narrower than half the thumbnail,
+// which is fine — the wide text block balances it.
 const photoPane = await sharp(photoSrc)
-  .resize({ width: RIGHT_W, height: H, fit: 'cover', position: 'centre' })
+  .resize({ height: H })  // height-fit, no extract; full image preserved
   .toBuffer();
+const photoMeta = await sharp(photoPane).metadata();
+const RIGHT_W = photoMeta.width;
 
-// ---- 3. SVG text overlay -------------------------------------------------------
-// Match 304's hierarchy: small "Doomer Optimism" wordmark, big "DO 305",
-// huge terracotta title, cream guest line.
-const INK = '#1a140e';        // very dark brown background
-const TAN = '#c9a37b';        // wordmark + "DO 305"
-const TERRA = '#c4632c';      // title accent
-const CREAM = '#e8d8b8';      // body cream
+// ---- 3. SVG text overlay (matches the 304 thumbnail visual language) ----------
+const INK = '#1a140e';
+const TAN = '#c9a37b';
+const TERRA = '#c4632c';
+const CREAM = '#e8d8b8';
 
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
   <defs>
@@ -54,9 +63,7 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
       .guests  { font-family: 'Inter', sans-serif; font-weight: 500; font-size: 32px; fill: ${CREAM}; }
     </style>
   </defs>
-  <!-- dark ground -->
   <rect x="0" y="0" width="${W}" height="${H}" fill="${INK}" />
-  <!-- left text block -->
   <text x="60" y="80"  class="wm-line">Doomer</text>
   <text x="60" y="120" class="wm-line">Optimism</text>
   <text x="60" y="245" class="ep">DO 305</text>
@@ -66,14 +73,10 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
   <text x="60" y="535" class="guests">&amp; Seth Harris</text>
 </svg>`;
 
-const textPane = await sharp(Buffer.from(svg))
-  .png()
-  .toBuffer();
+const textPane = await sharp(Buffer.from(svg)).png().toBuffer();
 
 // ---- 4. final composite --------------------------------------------------------
-const thumbnail = await sharp({
-  create: { width: W, height: H, channels: 4, background: INK },
-})
+await sharp({ create: { width: W, height: H, channels: 4, background: INK } })
   .composite([
     { input: textPane, top: 0, left: 0 },
     { input: photoPane, top: 0, left: W - RIGHT_W },
