@@ -20,12 +20,11 @@ const OUT_DIR = '/home/user/doomer-optimism/public/episodes/305';
 const W = 1280, H = 720;
 
 // ---- 1. clean the screenshot ---------------------------------------------------
-// Source: 1179 × 2556 iOS screenshot. The brick-wall photo runs y≈110..1900.
-// Patrick stands in the arch (head ~y=720, feet ~y=1450). Seth sits on the
-// stone step to his right (head ~y=1450, feet ~y=1850). Keep the full photo
-// so both figures are inside the frame.
+// Source: 1179 × 2556 iOS screenshot. Crop tight on the two figures —
+// Patrick standing (head ~y=720, feet ~y=1450) and Seth sitting on the stone
+// step (head ~y=1450, feet ~y=1850). Tight box: x=260..900, y=640..1900.
 const photoSrc = await sharp(SRC)
-  .extract({ left: 0, top: 110, width: 1179, height: 1790 })
+  .extract({ left: 260, top: 640, width: 640, height: 1260 })
   .toBuffer();
 
 await mkdir(OUT_DIR, { recursive: true });
