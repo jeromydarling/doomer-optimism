@@ -1,0 +1,116 @@
+name: Probe episode audio
+
+# Diagnostic: pull an episode's MP3 from the Anchor enclosure URL, run
+# ffprobe + a decode error-detection pass, commit the log back so we can
+# read it without leaving the repo.
+#
+# Push-trigger fires automatically when this workflow or the probe args
+# change; can also be run manually via workflow_dispatch.
+
+on:
+  workflow_dispatch:
+    inputs:
+      episode:
+        description: "Episode number"
+        required: false
+        default: '305'
+  push:
+    paths:
+      - '.github/workflows/probe-episode-audio.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: probe-episode-audio
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ffmpeg + xmllint
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y ffmpeg libxml2-utils
+
+      - name: Probe the episode
+        env:
+          EP: ${{ github.event.inputs.episode || '305' }}
+          FEED: https://anchor.fm/s/68308b7c/podcast/rss
+        run: |
+          mkdir -p docs/runs
+          LOG=docs/runs/probe-ep-${EP}.log
+
+          {
+            echo "=== ep-${EP} audio probe @ $(date -u +%FT%TZ) ==="
+            echo
+
+            echo "--- fetch RSS ---"
+            curl -fsSL "$FEED" -o /tmp/rss.xml
+            wc -c /tmp/rss.xml
+            echo
+
+            echo "--- locate episode ${EP} ---"
+            # Find the item whose <title> contains "DO ${EP}" or "#${EP}",
+            # then read its enclosure url. xmllint with XPath works on
+            # well-formed RSS; the feed is XML.
+            URL=$(xmllint --xpath "string(//item[contains(title/text(), 'DO ${EP} ') or contains(title/text(), '#${EP} ')]/enclosure/@url)" /tmp/rss.xml 2>/dev/null || true)
+            if [ -z "$URL" ]; then
+              echo "ERROR: could not find episode ${EP} in RSS"
+              echo "First 30 episode titles in feed:"
+              xmllint --xpath "//item/title/text()" /tmp/rss.xml 2>/dev/null | tr '<' '\n' | grep -v '^$' | head -30
+              exit 1
+            fi
+            echo "Audio URL: $URL"
+            echo
+
+            echo "--- follow redirects (HEAD) ---"
+            curl -sIL "$URL" | grep -iE '^(HTTP|content-type|content-length|location|last-modified|etag|x-amz|server)' | head -40
+            echo
+
+            echo "--- download ---"
+            curl -fsSL -o /tmp/ep.audio "$URL"
+            ls -lh /tmp/ep.audio
+            file /tmp/ep.audio
+            echo
+
+            echo "--- ffprobe (format + streams) ---"
+            ffprobe -v warning -hide_banner -show_format -show_streams /tmp/ep.audio
+            echo
+
+            echo "--- ffprobe (packets, last 20 — looking for malformed frames at end) ---"
+            ffprobe -v warning -hide_banner -show_packets -select_streams a:0 /tmp/ep.audio 2>&1 | tail -120
+            echo
+
+            echo "--- ffmpeg decode pass w/ error detection ---"
+            # Decode the full file to /dev/null with explode-on-error so
+            # any corruption shows up loudly. Capture stderr.
+            ffmpeg -v warning -err_detect +crccheck+bitstream+buffer -xerror -i /tmp/ep.audio -f null - 2>&1 | head -120 || echo "[decode exited non-zero]"
+            echo
+
+            echo "--- ffmpeg loudness scan (volumedetect) ---"
+            ffmpeg -v warning -i /tmp/ep.audio -af volumedetect -f null - 2>&1 | head -30
+            echo
+
+            echo "=== probe complete ==="
+          } 2>&1 | tee "$LOG"
+
+      - name: Commit log
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/runs/
+          if ! git diff --cached --quiet; then
+            git commit -m "Audio probe log: episode ${{ github.event.inputs.episode || '305' }}"
+            for attempt in 1 2 3 4 5; do
+              if git push origin HEAD:${{ github.ref_name }} 2>&1 | head -3; then break; fi
+              git fetch origin ${{ github.ref_name }} --quiet || true
+              git rebase --autostash origin/${{ github.ref_name }} --quiet || true
+              sleep $((attempt * 3))
+            done
+          fi
