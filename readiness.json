@@ -4,20 +4,20 @@
     {
       "name": "elevenlabs",
       "ok": false,
-      "ms": 419,
+      "ms": 407,
       "error": "ElevenLabs 401"
     },
     {
       "name": "anthropic",
       "ok": true,
-      "ms": 871,
+      "ms": 1364,
       "healthy": true,
       "note": "Auth OK; no balance endpoint exists."
     },
     {
       "name": "drive-oauth",
       "ok": true,
-      "ms": 315,
+      "ms": 328,
       "healthy": true,
       "expiresIn": 3599,
       "note": "Refresh token valid."
@@ -38,7 +38,7 @@
     {
       "name": "disk",
       "ok": true,
-      "ms": 164,
+      "ms": 165,
       "healthy": true,
       "availGb": 89,
       "minGb": 10,
@@ -47,7 +47,7 @@
     {
       "name": "state-branch",
       "ok": true,
-      "ms": 149,
+      "ms": 153,
       "healthy": true,
       "note": "pipeline-state branch reachable."
     },
@@ -62,7 +62,7 @@
     {
       "name": "episodes-dir",
       "ok": true,
-      "ms": 1,
+      "ms": 2,
       "healthy": true,
       "note": "Writable."
     }
@@ -72,5 +72,5 @@
     "buffer",
     "ffmpeg"
   ],
-  "at": "2026-06-28T03:28:48.118Z"
+  "at": "2026-06-28T05:46:04.576Z"
 }
