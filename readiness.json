@@ -4,20 +4,20 @@
     {
       "name": "elevenlabs",
       "ok": false,
-      "ms": 335,
+      "ms": 512,
       "error": "ElevenLabs 401"
     },
     {
       "name": "anthropic",
       "ok": true,
-      "ms": 867,
+      "ms": 946,
       "healthy": true,
       "note": "Auth OK; no balance endpoint exists."
     },
     {
       "name": "drive-oauth",
       "ok": true,
-      "ms": 272,
+      "ms": 529,
       "healthy": true,
       "expiresIn": 3599,
       "note": "Refresh token valid."
@@ -25,36 +25,36 @@
     {
       "name": "buffer",
       "ok": true,
-      "ms": 147,
+      "ms": 352,
       "healthy": false,
       "note": "BUFFER_API_TOKEN not set."
     },
     {
       "name": "ffmpeg",
       "ok": false,
-      "ms": 147,
+      "ms": 352,
       "error": "ffmpeg not on PATH"
     },
     {
       "name": "disk",
       "ok": true,
-      "ms": 144,
+      "ms": 349,
       "healthy": true,
-      "availGb": 88,
+      "availGb": 87,
       "minGb": 10,
-      "note": "88GB free."
+      "note": "87GB free."
     },
     {
       "name": "state-branch",
       "ok": true,
-      "ms": 141,
+      "ms": 334,
       "healthy": true,
       "note": "pipeline-state branch reachable."
     },
     {
       "name": "adobe-mcp",
       "ok": true,
-      "ms": 2,
+      "ms": 1,
       "healthy": false,
       "skip": true,
       "note": "Adobe MCP not yet wired for headless CI. Stages stub to MANUAL_OVERRIDE."
@@ -62,7 +62,7 @@
     {
       "name": "episodes-dir",
       "ok": true,
-      "ms": 2,
+      "ms": 1,
       "healthy": true,
       "note": "Writable."
     }
@@ -72,5 +72,5 @@
     "buffer",
     "ffmpeg"
   ],
-  "at": "2026-07-21T09:41:02.719Z"
+  "at": "2026-07-21T12:01:34.482Z"
 }
