@@ -4,7 +4,7 @@
     {
       "name": "elevenlabs",
       "ok": false,
-      "ms": 403,
+      "ms": 332,
       "error": "ElevenLabs 401"
     },
     {
@@ -17,7 +17,7 @@
     {
       "name": "drive-oauth",
       "ok": true,
-      "ms": 327,
+      "ms": 294,
       "healthy": true,
       "expiresIn": 3599,
       "note": "Refresh token valid."
@@ -25,20 +25,20 @@
     {
       "name": "buffer",
       "ok": true,
-      "ms": 146,
+      "ms": 168,
       "healthy": false,
       "note": "BUFFER_API_TOKEN not set."
     },
     {
       "name": "ffmpeg",
       "ok": false,
-      "ms": 146,
+      "ms": 168,
       "error": "ffmpeg not on PATH"
     },
     {
       "name": "disk",
       "ok": true,
-      "ms": 144,
+      "ms": 165,
       "healthy": true,
       "availGb": 88,
       "minGb": 10,
@@ -47,7 +47,7 @@
     {
       "name": "state-branch",
       "ok": true,
-      "ms": 141,
+      "ms": 153,
       "healthy": true,
       "note": "pipeline-state branch reachable."
     },
@@ -72,5 +72,5 @@
     "buffer",
     "ffmpeg"
   ],
-  "at": "2026-07-26T19:36:03.985Z"
+  "at": "2026-07-26T21:12:35.226Z"
 }
