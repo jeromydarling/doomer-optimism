@@ -4,41 +4,41 @@
     {
       "name": "elevenlabs",
       "ok": false,
-      "ms": 553,
+      "ms": 453,
       "error": "ElevenLabs 401"
     },
     {
       "name": "anthropic",
       "ok": true,
-      "ms": 1010,
+      "ms": 927,
       "healthy": true,
       "note": "Auth OK; no balance endpoint exists."
     },
     {
       "name": "drive-oauth",
       "ok": true,
-      "ms": 896,
+      "ms": 462,
       "healthy": true,
-      "expiresIn": 3598,
+      "expiresIn": 3599,
       "note": "Refresh token valid."
     },
     {
       "name": "buffer",
       "ok": true,
-      "ms": 407,
+      "ms": 308,
       "healthy": false,
       "note": "BUFFER_API_TOKEN not set."
     },
     {
       "name": "ffmpeg",
       "ok": false,
-      "ms": 407,
+      "ms": 308,
       "error": "ffmpeg not on PATH"
     },
     {
       "name": "disk",
       "ok": true,
-      "ms": 405,
+      "ms": 306,
       "healthy": true,
       "availGb": 87,
       "minGb": 10,
@@ -47,7 +47,7 @@
     {
       "name": "state-branch",
       "ok": true,
-      "ms": 295,
+      "ms": 303,
       "healthy": true,
       "note": "pipeline-state branch reachable."
     },
@@ -72,5 +72,5 @@
     "buffer",
     "ffmpeg"
   ],
-  "at": "2026-08-13T22:04:21.286Z"
+  "at": "2026-08-13T23:04:11.002Z"
 }
